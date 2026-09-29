@@ -36,6 +36,12 @@ const userSchema = new mongoose.Schema(
       max: 4,
       default: 1,
     },
+        solvedProblems: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Problem",
+      },
+    ],
   },
   {
     timestamps: true,

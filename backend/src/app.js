@@ -3,6 +3,11 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 
 import authRoutes from "./routes/authRoutes.js";
+import submissionRoutes from "./routes/submissionRoutes.js";
+import codeRoutes from "./routes/codeRoute.js";
+import problemRoutes from "./routes/problemRoute.js";
+import userRoutes from "./routes/userRoute.js";
+import leaderboardRoutes from "./routes/leaderboardRoute.js";
 
 const app = express();
 
@@ -34,6 +39,29 @@ app.get("/", (req, res) => {
 app.use(
   "/api/auth",
   authRoutes,
+);
+
+app.use(
+  "/api/submissions",
+  submissionRoutes,
+);
+app.use(
+  "/api/code",
+  codeRoutes,
+);
+app.use(
+  "/api/problems",
+  problemRoutes,
+);
+
+app.use(
+  "/api/users",
+  userRoutes,
+);
+
+app.use(
+  "/api/leaderboard",
+  leaderboardRoutes,
 );
 
 export default app;
