@@ -9,12 +9,17 @@ const sendTokenResponse = (user, statusCode, res) => {
 
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+
+    secure:
+      process.env.NODE_ENV === "production",
+
     sameSite:
       process.env.NODE_ENV === "production"
         ? "none"
         : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+
+    maxAge:
+      7 * 24 * 60 * 60 * 1000,
   };
 
   res
@@ -26,13 +31,14 @@ const sendTokenResponse = (user, statusCode, res) => {
     )
     .json({
       success: true,
-      token,
+      message:
+        "Authentication successful",
+
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        college: user.college,
         branch: user.branch,
         year: user.year,
       },
@@ -155,16 +161,25 @@ export const logout = async (
   req,
   res,
 ) => {
-  res
-    .status(200)
-    .cookie("token", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    })
-    .json({
-      success: true,
-      message: "Logged out successfully",
-    });
+  res.clearCookie("token", {
+    httpOnly: true,
+
+    secure:
+      process.env.NODE_ENV ===
+      "production",
+
+    sameSite:
+      process.env.NODE_ENV ===
+      "production"
+        ? "none"
+        : "lax",
+  });
+
+  return res.status(200).json({
+    success: true,
+    message:
+      "Logged out successfully",
+  });
 };
 
 
