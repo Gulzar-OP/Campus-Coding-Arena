@@ -29,12 +29,20 @@ const userSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    role: {
+        type: String,
+        enum: [
+            "student",
+            "teacher",
+            "admin",
+        ],
+        default: "student",
+    },
 
     year: {
       type: Number,
       min: 1,
-      max: 4,
-      default: 1,
+      max: 4
     },
         solvedProblems: [
       {

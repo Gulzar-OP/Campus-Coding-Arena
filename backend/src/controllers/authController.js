@@ -2,70 +2,60 @@ import User from "../models/user.js";
 import generateToken from "../utils/generateToken.js";
 
 const sendTokenResponse = (user, statusCode, res) => {
-  const token = generateToken(
-    user._id,
-    user.role,
-  );
+  const token = generateToken(user._id,user.role,);
 
-  const cookieOptions = {
+  res.cookie("token", token, {
     httpOnly: true,
 
-    secure:
-      process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production",
 
-    sameSite:
-      process.env.NODE_ENV === "production"
-        ? "none"
-        : "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
 
-    maxAge:
-      7 * 24 * 60 * 60 * 1000,
-  };
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 
-  res
-    .status(statusCode)
-    .cookie(
-      "token",
-      token,
-      cookieOptions,
-    )
-    .json({
-      success: true,
-      message:
-        "Authentication successful",
+  return res.status(statusCode).json({
+    success: true,
 
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        branch: user.branch,
-        year: user.year,
-      },
-    });
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      branch: user.branch,
+      year: user.year,
+    },
+  });
 };
 
 // REGISTER
 export const register = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      password,
-      branch,
-      year,
-    } = req.body;
+    const { name, email, password, branch, year, role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        message:
-          "Name, email and password are required",
+        message: "Name, email and password are required",
       });
     }
 
+    // Only student or teacher allowed
+    const allowedRoles = ["student", "teacher"];
+
+    const selectedRole = role || "student";
+
+    if (!allowedRoles.includes(selectedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: "Role must be either student or teacher",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
     const existingUser = await User.findOne({
-      email,
+      email: normalizedEmail,
     });
 
     if (existingUser) {
@@ -76,25 +66,26 @@ export const register = async (req, res) => {
     }
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+
+      email: normalizedEmail,
+
       password,
-      branch,
-      year,
+
+      role: selectedRole,
+
+      branch: selectedRole === "student" ? branch || "" : "",
+
+      year: selectedRole === "student" && year ? Number(year) : undefined,
     });
 
-    sendTokenResponse(
-      user,
-      201,
-      res,
-    );
+    sendTokenResponse(user, 201, res);
   } catch (error) {
-    console.error(error);
+    console.error("Register error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message:
-        "Server error while registering user",
+      message: "Server error while registering user",
       error: error.message,
     });
   }
@@ -103,16 +94,12 @@ export const register = async (req, res) => {
 // LOGIN
 export const login = async (req, res) => {
   try {
-    const {
-      email,
-      password,
-    } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message:
-          "Email and password are required",
+        message: "Email and password are required",
       });
     }
 
@@ -127,10 +114,7 @@ export const login = async (req, res) => {
       });
     }
 
-    const isMatch =
-      await user.comparePassword(
-        password,
-      );
+    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -139,59 +123,37 @@ export const login = async (req, res) => {
       });
     }
 
-    sendTokenResponse(
-      user,
-      200,
-      res,
-    );
+    sendTokenResponse(user, 200, res);
   } catch (error) {
     console.error(error);
 
     res.status(500).json({
       success: false,
-      message:
-        "Server error while logging in",
+      message: "Server error while logging in",
       error: error.message,
     });
   }
 };
 
 // LOGOUT
-export const logout = async (
-  req,
-  res,
-) => {
+export const logout = async (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
 
-    secure:
-      process.env.NODE_ENV ===
-      "production",
+    secure: process.env.NODE_ENV === "production",
 
-    sameSite:
-      process.env.NODE_ENV ===
-      "production"
-        ? "none"
-        : "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   });
 
   return res.status(200).json({
     success: true,
-    message:
-      "Logged out successfully",
+    message: "Logged out successfully",
   });
 };
 
-
-export const getMe = async (
-  req,
-  res,
-) => {
+export const getMe = async (req, res) => {
   try {
-    const user =
-      await User.findById(
-        req.user._id,
-      );
+    const user = await User.findById(req.user._id);
 
     res.status(200).json({
       success: true,
@@ -200,8 +162,7 @@ export const getMe = async (
   } catch (error) {
     res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch profile",
+      message: "Failed to fetch profile",
     });
   }
 };

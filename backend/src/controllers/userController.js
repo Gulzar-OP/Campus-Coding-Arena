@@ -69,3 +69,194 @@ export const getMyStats = async (
     });
   }
 };
+
+export const getMyProfile = async (
+  req,
+  res,
+) => {
+  try {
+    const user = await User.findById(
+      req.user._id,
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error(
+      "GET PROFILE ERROR:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch profile",
+      error: error.message,
+    });
+  }
+};
+
+export const updateMyProfile = async (req, res) => {
+    try {
+      const {
+        name,
+        branch,
+        year,
+      } = req.body;
+
+      const user =
+        await User.findById(
+          req.user._id,
+        );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "User not found",
+        });
+      }
+
+      // ============================
+      // NAME
+      // ============================
+
+      if (
+        name !== undefined
+      ) {
+        if (!name.trim()) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Name cannot be empty",
+          });
+        }
+
+        user.name =
+          name.trim();
+      }
+
+      // ============================
+      // BRANCH
+      // ============================
+
+      if (
+        branch !== undefined
+      ) {
+        user.branch =
+          branch.trim();
+      }
+
+      // ============================
+      // YEAR
+      // ============================
+
+      if (
+        year !== undefined
+      ) {
+        const parsedYear =
+          Number(year);
+
+        if (
+          Number.isNaN(
+            parsedYear,
+          ) ||
+          parsedYear < 1 ||
+          parsedYear > 4
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Year must be between 1 and 4",
+          });
+        }
+
+        user.year =
+          parsedYear;
+      }
+
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Profile updated successfully",
+
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          branch: user.branch,
+          year: user.year,
+          role: user.role,
+          solvedProblems:
+            user.solvedProblems,
+          createdAt:
+            user.createdAt,
+          updatedAt:
+            user.updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE PROFILE ERROR:",
+        error,
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to update profile",
+        error: error.message,
+      });
+    }
+};
+
+export const getStudentById = async (
+  req,
+  res,
+) => {
+  try {
+    const { id } = req.params;
+
+    const student =
+      await User.findOne({
+        _id: id,
+        role: "student",
+      }).select("-password");
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Student not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      student,
+    });
+  } catch (error) {
+    console.error(
+      "GET STUDENT BY ID ERROR:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch student",
+      error: error.message,
+    });
+  }
+};

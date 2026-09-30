@@ -1,9 +1,9 @@
 import express from "express";
 
 import {
-  askAI,
-  getMyAIHistory,
-} from "../controllers/aiController.js";
+  getStudentDashboard,
+  getMyResults,getResultByTest
+} from "../controllers/studentController.js";
 
 import {
   protect,
@@ -16,18 +16,24 @@ import {
 const router = express.Router();
 
 router.use(protect);
+
 router.use(
   authorizeRoles("student"),
 );
 
-router.post(
-  "/ask",
-  askAI,
+router.get(
+  "/dashboard",
+  getStudentDashboard,
+);
+router.get(
+  "/results/:testId",
+  getResultByTest,
 );
 
+
 router.get(
-  "/history/:testId",
-  getMyAIHistory,
+  "/results",
+  getMyResults,
 );
 
 export default router;

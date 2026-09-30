@@ -1,55 +1,25 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 
-export const protect = async (
-  req,
-  res,
-  next,
-) => {
+export const protect = async (req, res, next) => {
   try {
-    let token;
-
-    // cookie
-    if (req.cookies?.token) {
-      token = req.cookies.token;
-    }
-
-    // bearer token
-    if (
-      !token &&
-      req.headers.authorization?.startsWith(
-        "Bearer ",
-      )
-    ) {
-      token =
-        req.headers.authorization.split(
-          " ",
-        )[1];
-    }
+    const token = req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message:
-          "Authentication required",
+        message: "Not authorized, please login",
       });
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET,
-    );
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user =
-      await User.findById(
-        decoded.userId,
-      );
+    const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message:
-          "User no longer exists",
+        message: "User no longer exists",
       });
     }
 
@@ -59,8 +29,7 @@ export const protect = async (
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message:
-        "Invalid or expired token",
+      message: "Invalid or expired token",
     });
   }
 };
