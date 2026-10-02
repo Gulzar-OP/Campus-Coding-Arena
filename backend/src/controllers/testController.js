@@ -5,6 +5,7 @@ import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
 import generateAccessCode from "../utils/generateAccessCode.js";
 import mongoose from "mongoose";
 import Submission from "../models/submission.js";
+import User from "../models/user.js";
 // ==============================
 // CREATE TEST
 // ==============================
@@ -197,13 +198,11 @@ export const createTest = async (req, res) => {
     let exists = true;
 
     while (exists) {
-    accessCode =
-        generateAccessCode();
+      accessCode = generateAccessCode();
 
-    exists =
-        await Test.exists({
+      exists = await Test.exists({
         accessCode,
-        });
+      });
     }
 
     const test = await Test.create({
@@ -275,10 +274,7 @@ export const getAllTests = async (req, res) => {
 // GET /api/tests/:id
 // ============================================================
 
-export const getTestById = async (
-  req,
-  res,
-) => {
+export const getTestById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -286,11 +282,7 @@ export const getTestById = async (
     // VALIDATE TEST ID
     // ==========================================
 
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        id,
-      )
-    ) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid test id",
@@ -304,9 +296,7 @@ export const getTestById = async (
     // Manual fetch karenge.
     // ==========================================
 
-    const test = await Test.findById(
-      id,
-    )
+    const test = await Test.findById(id)
       .populate({
         path: "createdBy",
         select: "name email role",
@@ -320,27 +310,16 @@ export const getTestById = async (
       });
     }
 
-    console.log(
-      "RAW TEST PROBLEMS:",
-      JSON.stringify(
-        test.problems,
-        null,
-        2,
-      ),
-    );
+    console.log("RAW TEST PROBLEMS:", JSON.stringify(test.problems, null, 2));
 
     // ==========================================
     // VALIDATE PROBLEMS
     // ==========================================
 
-    if (
-      !Array.isArray(test.problems) ||
-      test.problems.length === 0
-    ) {
+    if (!Array.isArray(test.problems) || test.problems.length === 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "No problems found in this test",
+        message: "No problems found in this test",
       });
     }
 
@@ -348,53 +327,43 @@ export const getTestById = async (
     // EXTRACT PROBLEM IDS
     // ==========================================
 
-    const problemIds =
-      test.problems
-        .map((entry) => {
-          // Expected:
-          //
-          // {
-          //   problem: ObjectId,
-          //   marks: 10
-          // }
+    const problemIds = test.problems
+      .map((entry) => {
+        // Expected:
+        //
+        // {
+        //   problem: ObjectId,
+        //   marks: 10
+        // }
 
-          if (!entry) {
-            return null;
-          }
-
-          // populated object
-          if (
-            entry.problem &&
-            typeof entry.problem ===
-              "object" &&
-            entry.problem._id
-          ) {
-            return String(
-              entry.problem._id,
-            );
-          }
-
-          // ObjectId / string
-          if (entry.problem) {
-            return String(
-              entry.problem,
-            );
-          }
-
+        if (!entry) {
           return null;
-        })
-        .filter(Boolean);
+        }
 
-    console.log(
-      "PROBLEM IDS:",
-      problemIds,
-    );
+        // populated object
+        if (
+          entry.problem &&
+          typeof entry.problem === "object" &&
+          entry.problem._id
+        ) {
+          return String(entry.problem._id);
+        }
+
+        // ObjectId / string
+        if (entry.problem) {
+          return String(entry.problem);
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+
+    console.log("PROBLEM IDS:", problemIds);
 
     if (problemIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "Test contains invalid problem references",
+        message: "Test contains invalid problem references",
       });
     }
 
@@ -402,21 +371,13 @@ export const getTestById = async (
     // FETCH ALL ACTUAL PROBLEMS
     // ==========================================
 
-    const problems =
-      await Problem.find({
-        _id: {
-          $in: problemIds,
-        },
-      }).lean();
+    const problems = await Problem.find({
+      _id: {
+        $in: problemIds,
+      },
+    }).lean();
 
-    console.log(
-      "FOUND PROBLEMS:",
-      JSON.stringify(
-        problems,
-        null,
-        2,
-      ),
-    );
+    console.log("FOUND PROBLEMS:", JSON.stringify(problems, null, 2));
 
     // ==========================================
     // CREATE LOOKUP MAP
@@ -425,99 +386,57 @@ export const getTestById = async (
     const problemMap = new Map();
 
     problems.forEach((problem) => {
-      problemMap.set(
-        String(problem._id),
-        problem,
-      );
+      problemMap.set(String(problem._id), problem);
     });
 
     // ==========================================
     // HYDRATE TEST PROBLEMS
     // ==========================================
 
-    const hydratedProblems =
-      test.problems.map(
-        (entry, index) => {
-          let problemId = null;
+    const hydratedProblems = test.problems.map((entry, index) => {
+      let problemId = null;
 
-          if (
-            entry?.problem &&
-            typeof entry.problem ===
-              "object" &&
-            entry.problem._id
-          ) {
-            problemId = String(
-              entry.problem._id,
-            );
-          } else if (
-            entry?.problem
-          ) {
-            problemId = String(
-              entry.problem,
-            );
-          }
+      if (
+        entry?.problem &&
+        typeof entry.problem === "object" &&
+        entry.problem._id
+      ) {
+        problemId = String(entry.problem._id);
+      } else if (entry?.problem) {
+        problemId = String(entry.problem);
+      }
 
-          const actualProblem =
-            problemMap.get(
-              problemId,
-            );
+      const actualProblem = problemMap.get(problemId);
 
-          console.log(
-            `ENTRY ${index}:`,
-            {
-              problemId,
-              found:
-                Boolean(
-                  actualProblem,
-                ),
-            },
-          );
+      console.log(`ENTRY ${index}:`, {
+        problemId,
+        found: Boolean(actualProblem),
+      });
 
-          return {
-            problem:
-              actualProblem ||
-              null,
+      return {
+        problem: actualProblem || null,
 
-            problemId,
+        problemId,
 
-            marks:
-              Number(
-                entry?.marks ??
-                  10,
-              ),
-          };
-        },
-      );
+        marks: Number(entry?.marks ?? 10),
+      };
+    });
 
     // ==========================================
     // CHECK BROKEN REFERENCES
     // ==========================================
 
-    const missingProblems =
-      hydratedProblems.filter(
-        (entry) =>
-          !entry.problem,
-      );
+    const missingProblems = hydratedProblems.filter((entry) => !entry.problem);
 
-    if (
-      missingProblems.length > 0
-    ) {
-      console.error(
-        "MISSING PROBLEMS:",
-        missingProblems,
-      );
+    if (missingProblems.length > 0) {
+      console.error("MISSING PROBLEMS:", missingProblems);
 
       return res.status(400).json({
         success: false,
 
-        message:
-          "Some problems assigned to this test no longer exist",
+        message: "Some problems assigned to this test no longer exist",
 
-        missingProblemIds:
-          missingProblems.map(
-            (item) =>
-              item.problemId,
-          ),
+        missingProblemIds: missingProblems.map((item) => item.problemId),
       });
     }
 
@@ -528,17 +447,12 @@ export const getTestById = async (
     const responseTest = {
       ...test,
 
-      problems:
-        hydratedProblems,
+      problems: hydratedProblems,
     };
 
     console.log(
       "FINAL TEST RESPONSE:",
-      JSON.stringify(
-        responseTest.problems,
-        null,
-        2,
-      ),
+      JSON.stringify(responseTest.problems, null, 2),
     );
 
     return res.status(200).json({
@@ -546,19 +460,14 @@ export const getTestById = async (
       test: responseTest,
     });
   } catch (error) {
-    console.error(
-      "GET TEST BY ID ERROR:",
-      error,
-    );
+    console.error("GET TEST BY ID ERROR:", error);
 
     return res.status(500).json({
       success: false,
 
-      message:
-        "Failed to fetch test",
+      message: "Failed to fetch test",
 
-      error:
-        error.message,
+      error: error.message,
     });
   }
 };
@@ -629,7 +538,7 @@ export const startTest = async (req, res) => {
       user: req.user._id,
       test: testId,
     });
-    console.log(allSubmissions)
+    console.log(allSubmissions);
 
     console.log(
       "ALL SUBMISSIONS:",
@@ -642,33 +551,26 @@ export const startTest = async (req, res) => {
       })),
     );
 
-    const alreadySubmitted =
-      await Submission.findOne({
-        user: req.user._id,
-        test: testId,
-        status: "submitted",
-      });
+    const alreadySubmitted = await Submission.findOne({
+      user: req.user._id,
+      test: testId,
+      status: "submitted",
+    });
 
-    console.log(
-      "ALREADY SUBMITTED:",
-      alreadySubmitted,
-    );
+    console.log("ALREADY SUBMITTED:", alreadySubmitted);
 
     if (alreadySubmitted) {
       return res.status(409).json({
         success: false,
-        message:
-          "You have already submitted this test",
+        message: "You have already submitted this test",
       });
     }
-
 
     // =====================================================
     // GET TEST
     // =====================================================
 
-    const test =
-      await Test.findById(testId);
+    const test = await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
@@ -681,14 +583,10 @@ export const startTest = async (req, res) => {
     // TEST STATUS
     // =====================================================
 
-    if (
-      test.status !==
-      "published"
-    ) {
+    if (test.status !== "published") {
       return res.status(400).json({
         success: false,
-        message:
-          "Test is not published",
+        message: "Test is not published",
       });
     }
 
@@ -696,38 +594,23 @@ export const startTest = async (req, res) => {
     // TEST TIME CHECK
     // =====================================================
 
-    const now =
-      new Date();
+    const now = new Date();
 
-    const startTime =
-      new Date(
-        test.startTime,
-      );
+    const startTime = new Date(test.startTime);
 
-    const endTime =
-      new Date(
-        test.endTime,
-      );
+    const endTime = new Date(test.endTime);
 
-    if (
-      now.getTime() <
-      startTime.getTime()
-    ) {
+    if (now.getTime() < startTime.getTime()) {
       return res.status(400).json({
         success: false,
-        message:
-          "Test has not started yet",
+        message: "Test has not started yet",
       });
     }
 
-    if (
-      now.getTime() >
-      endTime.getTime()
-    ) {
+    if (now.getTime() > endTime.getTime()) {
       return res.status(400).json({
         success: false,
-        message:
-          "Test has already ended",
+        message: "Test has already ended",
       });
     }
 
@@ -735,20 +618,16 @@ export const startTest = async (req, res) => {
     // CHECK EXISTING ATTEMPT
     // =====================================================
 
-    const existingAttempt =
-      await TestAttempt.findOne({
-        test: test._id,
-        student:
-          req.user._id,
-      });
+    const existingAttempt = await TestAttempt.findOne({
+      test: test._id,
+      student: req.user._id,
+    });
 
     if (existingAttempt) {
       return res.status(409).json({
         success: false,
-        message:
-          "You have already started this test",
-        attempt:
-          existingAttempt,
+        message: "You have already started this test",
+        attempt: existingAttempt,
       });
     }
 
@@ -756,53 +635,37 @@ export const startTest = async (req, res) => {
     // INITIAL PROBLEM RESULTS
     // =====================================================
 
-    const problemResults =
-      test.problems.map(
-        (item) => ({
-          problem:
-            item.problem,
+    const problemResults = test.problems.map((item) => ({
+      problem: item.problem,
 
-          status:
-            "not_attempted",
+      status: "not_attempted",
 
-          submission:
-            null,
-        }),
-      );
+      submission: null,
+    }));
 
     // =====================================================
     // CREATE TEST ATTEMPT
     // =====================================================
 
-    const attempt =
-      await TestAttempt.create({
-        test:
-          test._id,
+    const attempt = await TestAttempt.create({
+      test: test._id,
 
-        student:
-          req.user._id,
+      student: req.user._id,
 
-        startedAt:
-          new Date(),
+      startedAt: new Date(),
 
-        status:
-          "in_progress",
+      status: "in_progress",
 
-        aiPromptsUsed:
-          0,
+      aiPromptsUsed: 0,
 
-        problemResults,
-      });
+      problemResults,
+    });
 
     // =====================================================
     // DEADLINE
     // =====================================================
 
-    const attemptDeadline =
-      getAttemptDeadline(
-        attempt,
-        test,
-      );
+    const attemptDeadline = getAttemptDeadline(attempt, test);
 
     // =====================================================
     // RESPONSE
@@ -810,55 +673,49 @@ export const startTest = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message:
-        "Test started successfully",
+      message: "Test started successfully",
 
       attempt: {
         ...attempt.toObject(),
 
-        deadline:
-          attemptDeadline,
+        deadline: attemptDeadline,
 
-        duration:
-          test.duration,
+        duration: test.duration,
       },
     });
   } catch (error) {
-    console.error(
-      "START TEST ERROR:",
-      error,
-    );
+    console.error("START TEST ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to start test",
-      error:
-        error.message,
+      message: "Failed to start test",
+      error: error.message,
     });
   }
 };
 
 export const finishTest = async (req, res) => {
   try {
-    console.log("========== FINISH TEST START ==========");
-
     const { id: testId } = req.params;
 
-    console.log("TEST ID:", testId);
-    console.log("USER ID:", req.user._id);
+    // ALREADY SUBMITTED CHECK
+    const existingSubmission = await Submission.findOne({
+      test: testId,
+      user: req.user._id,
+    });
 
-    // 1. Find active attempt
+    if (existingSubmission?.status === "submitted") {
+      return res.status(409).json({
+        success: false,
+        message: "You have already submitted this test",
+      });
+    }
+
     const attempt = await TestAttempt.findOne({
       test: testId,
       student: req.user._id,
       status: "in_progress",
     });
-
-    console.log(
-      "ATTEMPT FOUND:",
-      attempt?._id || null,
-    );
 
     if (!attempt) {
       return res.status(404).json({
@@ -867,90 +724,72 @@ export const finishTest = async (req, res) => {
       });
     }
 
-    // 2. Find permanent submission
-    console.log("FINDING SUBMISSION...");
-
-    const submission = await Submission.findOne({
-      test: testId,
-      user: req.user._id,
-    });
-
-    console.log(
-      "SUBMISSION FOUND:",
-      submission?._id || null,
-    );
+    const submission =
+      existingSubmission ||
+      (await Submission.findOne({
+        test: testId,
+        user: req.user._id,
+      }));
 
     if (!submission) {
       return res.status(400).json({
         success: false,
-        message:
-          "No problem submission found. Submit at least one problem before finishing.",
+        message: "No problem submission found",
       });
     }
 
-    // 3. Finalize permanent submission
-    console.log("FINALIZING SUBMISSION...");
-
+    // FINALIZE SUBMISSION
     submission.status = "submitted";
+
     submission.submittedAt = new Date();
 
-    submission.totalMarks =
-      submission.problems.reduce(
-        (total, item) =>
-          total + Number(item.marks || 0),
-        0,
-      );
+    submission.totalMarks = submission.problems.reduce(
+      (total, item) => total + Number(item.marks || 0),
+      0,
+    );
 
     await submission.save();
 
-    console.log(
-      "SUBMISSION SAVED:",
-      submission._id,
-    );
+    // SAVE SOLVED PROBLEMS IN USER PROFILE
+    const solvedProblemIds = submission.problems
+      .filter((item) => item.verdict === "Accepted")
+      .map((item) => item.problem);
 
-    // Data needed before deleting temporary attempt
+    if (solvedProblemIds.length > 0) {
+      await User.findByIdAndUpdate(req.user._id, {
+        $addToSet: {
+          solvedProblems: {
+            $each: solvedProblemIds,
+          },
+        },
+      });
+    }
+
     const result = {
       submissionId: submission._id,
+
       totalMarks: submission.totalMarks,
-      aiPromptsUsed:
-        attempt.aiPromptsUsed || 0,
-      submittedAt:
-        submission.submittedAt,
+      solvedProblems: solvedProblemIds,
+      aiPromptsUsed: attempt.aiPromptsUsed || 0,
+      submittedAt: submission.submittedAt,
     };
 
-    // 4. Delete temporary test attempt
-    console.log("DELETING TEST ATTEMPT...");
-
+    // DELETE TEMPORARY ATTEMPT
     await TestAttempt.deleteOne({
       _id: attempt._id,
     });
 
-    console.log(
-      "TEST ATTEMPT DELETED:",
-      attempt._id,
-    );
-
-    console.log(
-      "========== FINISH TEST COMPLETE ==========",
-    );
-
-    // 5. Response
     return res.status(200).json({
       success: true,
-      message:
-        "Assessment submitted successfully",
+      message: "Test submitted successfully",
       result,
     });
   } catch (error) {
-    console.error(
-      "FINISH TEST ERROR:",
-      error,
-    );
+    console.error("FINISH TEST ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to submit test",
+      message: "Failed to submit test",
       error: error.message,
     });
   }

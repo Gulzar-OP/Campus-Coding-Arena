@@ -16,17 +16,27 @@ import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
 
 export const submitCode = async (req, res) => {
   try {
-    const { testId, problemId, code, language } = req.body;
+    const {
+      testId,
+      problemId,
+      code,
+      language,
+    } = req.body;
 
     // ========================================================
     // VALIDATION
     // ========================================================
 
-    if (!testId || !problemId || !code?.trim() || !language) {
+    if (
+      !testId ||
+      !problemId ||
+      !code?.trim() ||
+      !language
+    ) {
       return res.status(400).json({
         success: false,
-
-        message: "Test, problem, code and language are required",
+        message:
+          "Test, problem, code and language are required",
       });
     }
 
@@ -34,12 +44,16 @@ export const submitCode = async (req, res) => {
     // GET TEST
     // ========================================================
 
-    const test = await Test.findById(testId);
+    const test =
+      await Test.findById(
+        testId,
+      );
 
     if (!test) {
       return res.status(404).json({
         success: false,
-        message: "Test not found",
+        message:
+          "Test not found",
       });
     }
 
@@ -47,11 +61,14 @@ export const submitCode = async (req, res) => {
     // TEST STATUS
     // ========================================================
 
-    if (test.status !== "published") {
+    if (
+      test.status !==
+      "published"
+    ) {
       return res.status(400).json({
         success: false,
-
-        message: "Test is not published",
+        message:
+          "Test is not published",
       });
     }
 
@@ -59,19 +76,20 @@ export const submitCode = async (req, res) => {
     // ACTIVE ATTEMPT
     // ========================================================
 
-    const attempt = await TestAttempt.findOne({
-      test: testId,
-
-      student: req.user._id,
-
-      status: "in_progress",
-    });
+    const attempt =
+      await TestAttempt.findOne({
+        test: testId,
+        student:
+          req.user._id,
+        status:
+          "in_progress",
+      });
 
     if (!attempt) {
       return res.status(404).json({
         success: false,
-
-        message: "Active test attempt not found",
+        message:
+          "Active test attempt not found",
       });
     }
 
@@ -79,23 +97,36 @@ export const submitCode = async (req, res) => {
     // TIMER CHECK
     // ========================================================
 
-    const deadline = getAttemptDeadline(attempt, test);
+    const deadline =
+      getAttemptDeadline(
+        attempt,
+        test,
+      );
 
-    const now = new Date();
+    const now =
+      new Date();
 
-    const deadlineDate = new Date(deadline);
+    const deadlineDate =
+      new Date(
+        deadline,
+      );
 
-    if (now.getTime() >= deadlineDate.getTime()) {
-      attempt.status = "expired";
+    if (
+      now.getTime() >=
+      deadlineDate.getTime()
+    ) {
+      attempt.status =
+        "expired";
 
-      attempt.submittedAt = now;
+      attempt.submittedAt =
+        now;
 
       await attempt.save();
 
       return res.status(403).json({
         success: false,
-
-        message: "Assessment time has expired",
+        message:
+          "Assessment time has expired",
       });
     }
 
@@ -103,15 +134,23 @@ export const submitCode = async (req, res) => {
     // CHECK PROBLEM BELONGS TO TEST
     // ========================================================
 
-    const testProblem = test.problems.find(
-      (item) => String(item.problem?._id || item.problem) === String(problemId),
-    );
+    const testProblem =
+      test.problems.find(
+        (item) =>
+          String(
+            item.problem?._id ||
+              item.problem,
+          ) ===
+          String(
+            problemId,
+          ),
+      );
 
     if (!testProblem) {
       return res.status(403).json({
         success: false,
-
-        message: "Problem does not belong to this test",
+        message:
+          "Problem does not belong to this test",
       });
     }
 
@@ -119,21 +158,27 @@ export const submitCode = async (req, res) => {
     // GET PROBLEM
     // ========================================================
 
-    const problem = await Problem.findById(problemId);
+    const problem =
+      await Problem.findById(
+        problemId,
+      );
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-
-        message: "Problem not found",
+        message:
+          "Problem not found",
       });
     }
 
-    if (problem.isActive === false) {
+    if (
+      problem.isActive ===
+      false
+    ) {
       return res.status(400).json({
         success: false,
-
-        message: "Problem is inactive",
+        message:
+          "Problem is inactive",
       });
     }
 
@@ -141,11 +186,17 @@ export const submitCode = async (req, res) => {
     // CHECK TEST CASES
     // ========================================================
 
-    if (!Array.isArray(problem.testCases) || problem.testCases.length === 0) {
+    if (
+      !Array.isArray(
+        problem.testCases,
+      ) ||
+      problem.testCases
+        .length === 0
+    ) {
       return res.status(400).json({
         success: false,
-
-        message: "No test cases found for this problem",
+        message:
+          "No test cases found for this problem",
       });
     }
 
@@ -153,22 +204,33 @@ export const submitCode = async (req, res) => {
     // PREPARE TEST CASES
     // ========================================================
 
-    const testCases = problem.testCases.map((item) => ({
-      input: item.input || "",
+    const testCases =
+      problem.testCases.map(
+        (item) => ({
+          input:
+            item.input ||
+            "",
 
-      expectedOutput: item.expectedOutput || "",
+          expectedOutput:
+            item.expectedOutput ||
+            "",
 
-      isHidden: item.isHidden || false,
-    }));
+          isHidden:
+            item.isHidden ||
+            false,
+        }),
+      );
 
-    console.log("========== SUBMISSION ==========");
+    console.log(
+      "========== SUBMISSION ==========",
+    );
 
     console.log({
       testId,
       problemId,
       language,
-
-      totalTestCases: testCases.length,
+      totalTestCases:
+        testCases.length,
     });
 
     // ========================================================
@@ -178,25 +240,41 @@ export const submitCode = async (req, res) => {
     let runnerResult;
 
     try {
-      runnerResult = await queueCodeExecution({
-        code,
-        language,
-        testCases,
-      });
+      console.log(
+        "1. BEFORE QUEUE",
+      );
 
-      console.log("SUBMISSION RUNNER RESULT:", runnerResult);
-    } catch (runnerError) {
+      runnerResult =
+        await queueCodeExecution({
+          code,
+          language,
+          testCases,
+        });
+
+      console.log(
+        "2. AFTER QUEUE",
+      );
+
+      console.log(
+        "RUNNER RESULT:",
+        runnerResult,
+      );
+    } catch (
+      runnerError
+    ) {
       console.error(
         "SUBMISSION CODE RUNNER ERROR:",
-        runnerError.message || runnerError,
+        runnerError.message ||
+          runnerError,
       );
 
       return res.status(500).json({
         success: false,
-
-        message: "Code execution service failed",
-
-        error: runnerError.message || "Unknown execution error",
+        message:
+          "Code execution service failed",
+        error:
+          runnerError.message ||
+          "Unknown execution error",
       });
     }
 
@@ -204,158 +282,290 @@ export const submitCode = async (req, res) => {
     // RESULT
     // ========================================================
 
-    const results = runnerResult.results || [];
+    const results =
+      runnerResult.results ||
+      [];
 
     const passedTestCases =
-      runnerResult.passedTestCases ??
-      results.filter((item) => item.passed === true).length;
+      runnerResult
+        .passedTestCases ??
+      results.filter(
+        (item) =>
+          item.passed ===
+          true,
+      ).length;
 
-    const totalTestCases = runnerResult.totalTestCases ?? testCases.length;
+    const totalTestCases =
+      runnerResult
+        .totalTestCases ??
+      testCases.length;
 
     // ========================================================
     // VERDICT
     // ========================================================
 
-    let verdict = runnerResult.status || "Wrong Answer";
+    let verdict =
+      runnerResult.status ||
+      "Wrong Answer";
 
-    if (passedTestCases === totalTestCases && totalTestCases > 0) {
-      verdict = "Accepted";
+    if (
+      passedTestCases ===
+        totalTestCases &&
+      totalTestCases > 0
+    ) {
+      verdict =
+        "Accepted";
     }
 
-    if (verdict === "accepted") {
-      verdict = "Accepted";
+    if (
+      verdict ===
+      "accepted"
+    ) {
+      verdict =
+        "Accepted";
     }
 
     // ========================================================
     // EXECUTION DETAILS
     // ========================================================
 
-    const firstResult = results[0] || {};
+    const firstResult =
+      results[0] || {};
 
     const executionTime =
-      firstResult.executionTimeMs ?? firstResult.time ?? null;
+      firstResult
+        .executionTimeMs ??
+      firstResult.time ??
+      null;
 
-    const memory = firstResult.memory ?? null;
+    const memory =
+      firstResult.memory ??
+      null;
 
     const compileOutput =
-      runnerResult.compileOutput || firstResult.compileOutput || null;
+      runnerResult
+        .compileOutput ||
+      firstResult
+        .compileOutput ||
+      null;
 
     // ========================================================
     // MARKS
     // ========================================================
 
-    const marks = verdict === "Accepted" ? Number(testProblem.marks || 0) : 0;
+    const marks =
+      verdict ===
+      "Accepted"
+        ? Number(
+            testProblem.marks ||
+              0,
+          )
+        : 0;
 
     // ========================================================
     // FIND TEST-WISE SUBMISSION
-    // One User + One Test = One Document
+    // One user + one test = one document
     // ========================================================
 
-    let submission = await Submission.findOne({
-      user: req.user._id,
-
-      test: testId,
-    });
+    let submission =
+      await Submission.findOne({
+        user:
+          req.user._id,
+        test:
+          testId,
+      });
 
     // ========================================================
-    // CREATE IF FIRST PROBLEM SUBMISSION
+    // BLOCK IF TEST ALREADY FINALLY SUBMITTED
     // ========================================================
 
-    if (!submission) {
-      submission = new Submission({
-        user: req.user._id,
-
-        test: testId,
-
-        problems: [],
-
-        totalMarks: 0,
-
-        status: "in_progress",
+    if (
+      submission?.status ===
+      "submitted"
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This test has already been submitted",
       });
     }
 
     // ========================================================
-    // FIND EXISTING PROBLEM INSIDE TEST SUBMISSION
+    // CREATE SUBMISSION IF FIRST PROBLEM
     // ========================================================
 
-    const existingProblemIndex = submission.problems.findIndex(
-      (item) => String(item.problem) === String(problemId),
-    );
+    if (!submission) {
+      submission =
+        new Submission({
+          user:
+            req.user._id,
+
+          test:
+            testId,
+
+          problems:
+            [],
+
+          totalMarks:
+            0,
+
+          status:
+            "in_progress",
+        });
+    }
+
+    // ========================================================
+    // FIND EXISTING PROBLEM
+    // ========================================================
+
+    const existingProblemIndex =
+      submission.problems.findIndex(
+        (item) =>
+          String(
+            item.problem,
+          ) ===
+          String(
+            problemId,
+          ),
+      );
 
     // ========================================================
     // PROBLEM SUBMISSION DATA
     // ========================================================
 
-    const problemSubmission = {
-      problem: problemId,
+    const problemSubmission =
+      {
+        problem:
+          problemId,
 
-      code,
+        code,
 
-      language,
+        language,
 
-      verdict,
+        verdict,
 
-      passedTestCases,
+        passedTestCases,
 
-      totalTestCases,
+        totalTestCases,
 
-      marks,
+        marks,
 
-      executionTime,
+        executionTime,
 
-      memory,
+        memory,
 
-      submittedAt: new Date(),
-    };
+        submittedAt:
+          new Date(),
+      };
 
     // ========================================================
-    // UPDATE SAME PROBLEM
-    // OR ADD NEW PROBLEM
+    // UPDATE EXISTING PROBLEM OR ADD NEW
     // ========================================================
 
-    if (existingProblemIndex !== -1) {
-      submission.problems[existingProblemIndex] = problemSubmission;
+    if (
+      existingProblemIndex !==
+      -1
+    ) {
+      submission.problems[
+        existingProblemIndex
+      ] =
+        problemSubmission;
     } else {
-      submission.problems.push(problemSubmission);
+      submission.problems.push(
+        problemSubmission,
+      );
     }
 
     // ========================================================
     // CALCULATE TOTAL MARKS
     // ========================================================
 
-    submission.totalMarks = submission.problems.reduce(
-      (total, item) => total + Number(item.marks || 0),
+    submission.totalMarks =
+      submission.problems.reduce(
+        (
+          total,
+          item,
+        ) =>
+          total +
+          Number(
+            item.marks ||
+              0,
+          ),
+        0,
+      );
 
-      0,
+    // ========================================================
+    // SAVE SUBMISSION
+    // ========================================================
+
+    console.log(
+      "3. BEFORE SUBMISSION SAVE",
     );
-
-    // ========================================================
-    // SAVE
-    // ========================================================
 
     await submission.save();
 
-    // YAHAN ADD KARO
-
-    const attemptProblemIndex = attempt.problemResults.findIndex(
-      (item) => String(item.problem) === String(problemId),
+    console.log(
+      "4. AFTER SUBMISSION SAVE",
     );
 
-    if (attemptProblemIndex !== -1) {
-      attempt.problemResults[attemptProblemIndex].status =
-        verdict === "Accepted" ? "passed" : "failed";
+    // ========================================================
+    // UPDATE TEST ATTEMPT
+    // ========================================================
 
-      attempt.problemResults[attemptProblemIndex].submission = submission._id;
+    const attemptProblemIndex =
+      attempt.problemResults.findIndex(
+        (item) =>
+          String(
+            item.problem,
+          ) ===
+          String(
+            problemId,
+          ),
+      );
+
+    if (
+      attemptProblemIndex !==
+      -1
+    ) {
+      attempt.problemResults[
+        attemptProblemIndex
+      ].status =
+        verdict ===
+        "Accepted"
+          ? "passed"
+          : "failed";
+
+      attempt.problemResults[
+        attemptProblemIndex
+      ].submission =
+        submission._id;
     } else {
-      attempt.problemResults.push({
-        problem: problemId,
-        status: verdict === "Accepted" ? "passed" : "failed",
-        submission: submission._id,
-      });
+      attempt.problemResults.push(
+        {
+          problem:
+            problemId,
+
+          status:
+            verdict ===
+            "Accepted"
+              ? "passed"
+              : "failed",
+
+          submission:
+            submission._id,
+        },
+      );
     }
 
+    console.log(
+      "5. BEFORE ATTEMPT SAVE",
+    );
+
     await attempt.save();
+
+    console.log(
+      "6. AFTER ATTEMPT SAVE",
+    );
 
     // ========================================================
     // RESPONSE
@@ -364,48 +574,76 @@ export const submitCode = async (req, res) => {
     return res.status(200).json({
       success: true,
 
-      message: verdict === "Accepted" ? "Problem accepted" : verdict,
+      message:
+        verdict ===
+        "Accepted"
+          ? "Problem accepted"
+          : verdict,
 
       verdict,
+
       passedTestCases,
+
       totalTestCases,
+
       marks,
-      totalMarks: submission.totalMarks,
+
+      totalMarks:
+        submission.totalMarks,
 
       submission: {
-        _id: submission._id,
-        test: submission.test,
-        problem: problemId,
+        _id:
+          submission._id,
+
+        test:
+          submission.test,
+
+        problem:
+          problemId,
+
         verdict,
+
         passedTestCases,
+
         totalTestCases,
+
         marks,
-        totalMarks: submission.totalMarks,
+
+        totalMarks:
+          submission.totalMarks,
+
         executionTime,
+
         memory,
+
         compileOutput,
       },
 
       results,
     });
   } catch (error) {
-    console.error("SUBMIT CODE ERROR:", error);
+    console.error(
+      "SUBMIT CODE ERROR:",
+      error,
+    );
 
-    // duplicate index safety
-    if (error.code === 11000) {
+    if (
+      error.code ===
+      11000
+    ) {
       return res.status(409).json({
         success: false,
-
-        message: "Submission already exists for this test. Please retry.",
+        message:
+          "Submission already exists for this test. Please retry.",
       });
     }
 
     return res.status(500).json({
       success: false,
-
-      message: "Submission failed",
-
-      error: error.message,
+      message:
+        "Submission failed",
+      error:
+        error.message,
     });
   }
 };
