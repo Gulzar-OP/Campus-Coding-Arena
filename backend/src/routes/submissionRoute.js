@@ -5,6 +5,7 @@ import {
   getMySubmissions,
   getProblemSubmissions,
   getSubmissionById,
+  getTestSubmission,
 } from "../controllers/submissionController.js";
 
 import {
@@ -12,42 +13,41 @@ import {
 } from "../middleware/authMiddleware.js";
 
 import {
-  authorizeRoles,
-} from "../middleware/roleMiddleware.js";
+  submitLimiter,
+} from "../middleware/codeRateLimiter.js";
 
-const router = express.Router();
-
-router.use(protect);
+const router =
+  express.Router();
 
 router.post(
   "/submit",
-  authorizeRoles("student"),
+  protect,
+  submitLimiter,
   submitCode,
 );
 
 router.get(
   "/my",
-  authorizeRoles("student"),
+  protect,
   getMySubmissions,
 );
 
 router.get(
+  "/test/:testId",
+  protect,
+  getTestSubmission,
+);
+
+router.get(
   "/problem/:problemId",
-  authorizeRoles("student"),
+  protect,
   getProblemSubmissions,
 );
 
 router.get(
   "/:id",
-  authorizeRoles("student"),
+  protect,
   getSubmissionById,
 );
-
-// router.get(
-//   "/:id/attempt",
-//   protect,
-//   authorizeRoles("student"),
-//   getMyAttempt,
-// );
 
 export default router;

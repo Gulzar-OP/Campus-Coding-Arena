@@ -11,7 +11,7 @@ import aiRoutes from "./routes/aiRoute.js";
 import submissionRoutes from "./routes/submissionRoute.js";
 import studentRoutes from "./routes/studentRoute.js";
 import userRoutes from "./routes/userRoute.js";
-
+import teacherRoutes from "./routes/teacherRoute.js";
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -78,5 +78,6 @@ app.use(
   "/api/users",
   userRoutes,
 );
+app.use("/api/teacher", teacherRoutes);
 
 export default app;

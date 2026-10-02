@@ -1,16 +1,20 @@
 import Problem from "../models/Problem.js";
 import Test from "../models/test.js";
 import TestAttempt from "../models/testAttempt.js";
+import { queueCodeExecution } from "../services/codeQueueService.js";
 
-import {
-  executeCode,
-} from "../services/judge0Service.js";
+// import {
+//   executeSubmissionCode,
+// } from "../services/judge0Service.js";
 
 import {
   getAttemptDeadline,
 } from "../utils/getAttemptDeadline.js";
 
-export const runCode = async (req, res) => {
+export const runCode = async (
+  req,
+  res,
+) => {
   try {
     const {
       testId,
@@ -39,7 +43,9 @@ export const runCode = async (req, res) => {
     // CHECK TEST
     // ==============================
     const test =
-      await Test.findById(testId);
+      await Test.findById(
+        testId,
+      );
 
     if (!test) {
       return res.status(404).json({
@@ -92,8 +98,7 @@ export const runCode = async (req, res) => {
     const deadlineDate =
       new Date(deadline);
 
-    const now =
-      new Date();
+    const now = new Date();
 
     if (
       now.getTime() >=
@@ -121,7 +126,8 @@ export const runCode = async (req, res) => {
       test.problems.find(
         (item) =>
           String(
-            item.problem,
+            item.problem?._id ??
+              item.problem,
           ) ===
           String(problemId),
       );
@@ -150,7 +156,9 @@ export const runCode = async (req, res) => {
       });
     }
 
-    if (!problem.isActive) {
+    if (
+      problem.isActive === false
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -176,104 +184,110 @@ export const runCode = async (req, res) => {
     }
 
     // ==============================
-    // GET VISIBLE TEST CASE
+    // GET VISIBLE TEST CASES
     // ==============================
-    const visibleTestCase =
-      problem.testCases.find(
-        (item) =>
-          item.isHidden ===
-          false,
+    const visibleTestCases =
+      problem.testCases.filter(
+        (testCase) =>
+          testCase.isHidden !==
+          true,
       );
 
-    const testCase =
-      visibleTestCase ||
-      problem.testCases[0];
-
-    if (!testCase) {
+    if (
+      visibleTestCases.length === 0
+    ) {
       return res.status(400).json({
         success: false,
         message:
-          "No sample testcase available",
+          "No visible test cases available",
       });
     }
 
     // ==============================
-    // JUDGE0 EXECUTION
+    // CODE RUNNER EXECUTION
     // ==============================
-    let result;
+    let runnerResult;
 
     try {
       console.log(
-        "========== JUDGE0 RUN ==========",
+        "========== CODE RUNNER ==========",
       );
 
       console.log({
         testId,
         problemId,
         language,
-        stdin:
-          testCase.input || "",
-        expectedOutput:
-          testCase.expectedOutput ||
-          "",
+        totalVisibleTestCases:
+          visibleTestCases.length,
       });
 
-      result =
-        await executeCode({
-          code,
-          language,
+      // runnerResult =
+      //   await executeCode({
+      //     code,
+      //     language,
+      //     testCases:
+      //       visibleTestCases,
+      //   });
+runnerResult =
+  await queueCodeExecution({
+    code,
+    language,
 
-          stdin:
-            testCase.input ||
-            "",
+    testCases:
+      visibleTestCases,
 
-          expectedOutput:
-            testCase.expectedOutput ||
-            "",
-        });
+    userId:
+      req.user._id,
 
+    testId,
+
+    problemId,
+  });
       console.log(
-        "JUDGE0 RESULT:",
-        result,
+        "CODE RUNNER RESULT:",
+        runnerResult,
       );
-    } catch (judgeError) {
+    } catch (runnerError) {
       console.error(
-        "JUDGE0 ERROR:",
-        judgeError.response
-          ?.data ||
-          judgeError.message ||
-          judgeError,
+        "CODE RUNNER ERROR:",
+        runnerError.message ||
+          runnerError,
       );
 
       return res.status(500).json({
         success: false,
         message:
-          "Judge0 code execution failed",
-
+          "Code execution failed",
         error:
-          judgeError.response
-            ?.data ||
-          judgeError.message ||
-          "Unknown Judge0 error",
+          runnerError.message ||
+          "Unknown code runner error",
       });
     }
 
     // ==============================
-    // RESULT
+    // RESULT MAPPING
     // ==============================
+    const firstResult =
+      runnerResult.results?.[0] ??
+      {};
+
     const status =
-      result.status
-        ?.description ||
-      "Unknown";
+      runnerResult.status ??
+      "Internal Error";
 
     const stdout =
-      result.stdout || "";
+      firstResult.actualOutput ??
+      "";
+
+    const expectedOutput =
+      firstResult.expectedOutput ??
+      "";
 
     const stderr =
-      result.stderr || null;
+      firstResult.stderr || null;
 
     const compileOutput =
-      result.compile_output ||
+      runnerResult.compileOutput ||
       null;
 
     // ==============================
@@ -287,30 +301,40 @@ export const runCode = async (req, res) => {
 
         stdout,
 
-        expectedOutput:
-          testCase.expectedOutput ||
-          "",
+        expectedOutput,
 
         time:
-          result.time ||
+          firstResult.executionTimeMs ??
           null,
 
-        memory:
-          result.memory ||
-          null,
+        memory: null,
 
         stderr,
 
         compileOutput,
+
+        passedTestCases:
+          runnerResult
+            .passedTestCases ?? 0,
+
+        totalTestCases:
+          runnerResult
+            .totalTestCases ??
+          visibleTestCases.length,
+
+        totalDurationMs:
+          runnerResult
+            .totalDurationMs ??
+          null,
+
+        results:
+          runnerResult.results ??
+          [],
       },
 
       problem: {
-        id:
-          problem._id,
-
-        title:
-          problem.title,
-
+        id: problem._id,
+        title: problem.title,
         marks:
           testProblem.marks,
       },
@@ -320,7 +344,7 @@ export const runCode = async (req, res) => {
           deadlineDate,
 
         aiPromptsUsed:
-          attempt.aiPromptsUsed ||
+          attempt.aiPromptsUsed ??
           0,
       },
     });
@@ -337,10 +361,8 @@ export const runCode = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
       message:
         "Code execution failed",
-
       error:
         error.response?.data ||
         error.message,

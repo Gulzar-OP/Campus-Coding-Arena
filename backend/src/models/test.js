@@ -4,8 +4,7 @@ const testProblemSchema =
   new mongoose.Schema(
     {
       problem: {
-        type: mongoose.Schema.Types
-          .ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: "Problem",
         required: true,
       },
@@ -26,22 +25,17 @@ const testSchema =
     {
       title: {
         type: String,
-        required: [
-          true,
-          "Test title is required",
-        ],
+        required: true,
         trim: true,
       },
 
       description: {
         type: String,
         default: "",
-        trim: true,
       },
 
       createdBy: {
-        type: mongoose.Schema.Types
-          .ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
       },
@@ -53,11 +47,8 @@ const testSchema =
 
       duration: {
         type: Number,
-        required: [
-          true,
-          "Duration is required",
-        ],
-        min: 1,
+        required: true,
+        default: 60,
       },
 
       startTime: {
@@ -70,11 +61,25 @@ const testSchema =
         required: true,
       },
 
+      accessCode: {
+        type: String,
+        trim: true,
+        uppercase: true,
+      },
+
+      allowDirectAccess: {
+        type: Boolean,
+        default: false,
+      },
+
       maxAIPrompts: {
         type: Number,
         default: 3,
-        min: 0,
-        max: 3,
+      },
+
+      isActive: {
+        type: Boolean,
+        default: true,
       },
 
       status: {
@@ -85,23 +90,6 @@ const testSchema =
           "completed",
         ],
         default: "draft",
-      },
-
-      isActive: {
-        type: Boolean,
-        default: true,
-      },
-
-      accessCode: {
-        type: String,
-        unique: true,
-        uppercase: true,
-        trim: true,
-      },
-
-      allowDirectAccess: {
-        type: Boolean,
-        default: false,
       },
     },
     {

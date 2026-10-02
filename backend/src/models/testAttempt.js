@@ -25,11 +25,6 @@ const problemResultSchema =
         ref: "Submission",
         default: null,
       },
-
-      marksObtained: {
-        type: Number,
-        default: 0,
-      },
     },
     {
       _id: false,
@@ -79,11 +74,6 @@ const testAttemptSchema =
       problemResults: {
         type: [problemResultSchema],
         default: [],
-      },
-
-      totalMarks: {
-        type: Number,
-        default: 0,
       },
     },
     {

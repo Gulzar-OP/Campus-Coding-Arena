@@ -16,7 +16,7 @@ import {
   joinTest,
   getTestParticipants,
 } from "../controllers/testController.js";
-import { getMyAttempt } from "../controllers/testController2.js";
+import { getMyAttempt, repairTestProblems } from "../controllers/testController2.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
@@ -47,6 +47,10 @@ router.get("/:id", getTestById);
 // ==============================
 // TEACHER / ADMIN ROUTES
 // ==============================
+router.patch(
+  "/:id/repair-problems",
+  repairTestProblems,
+);
 
 router.post("/", authorizeRoles("teacher", "admin"), createTest);
 

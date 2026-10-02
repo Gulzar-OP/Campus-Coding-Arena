@@ -71,7 +71,7 @@ router.get(
 
 // Create standalone problem
 router.post(
-  "/add",
+  "/",
   protect,
   authorizeRoles(
     "teacher",
@@ -82,7 +82,7 @@ router.post(
 
 // Create problem / optionally attach to test
 router.post(
-  "/",
+  "/add",
   protect,
   authorizeRoles(
     "teacher",

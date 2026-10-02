@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
     },
 
     password: {
@@ -24,39 +25,73 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    rollNo: {
+      type: String,
+      trim: true,
+      uppercase: true,
+
+      // only student ke liye required
+      required: function () {
+        return this.role === "student";
+      },
+
+      unique: true,
+      sparse: true,
+    },
+
     branch: {
       type: String,
-      default: "",
       trim: true,
+      default: "",
     },
+
     role: {
-        type: String,
-        enum: [
-            "student",
-            "teacher",
-            "admin",
-        ],
-        default: "student",
+      type: String,
+      enum: ["student", "teacher", "admin"],
+      default: "student",
     },
 
     year: {
       type: Number,
       min: 1,
-      max: 4
+      max: 4,
+
+      required: function () {
+        return this.role === "student";
+      },
     },
-        solvedProblems: [
+
+    solvedProblems: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Problem",
       },
     ],
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+
+    profileImage: {
+      type: String,
+      default: "",
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
   },
 );
 
-// password hash before save
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) {
     return;
@@ -70,16 +105,18 @@ userSchema.pre("save", async function () {
   );
 });
 
-// password compare method
 userSchema.methods.comparePassword = async function (
   enteredPassword,
 ) {
-  return await bcrypt.compare(
+  return bcrypt.compare(
     enteredPassword,
     this.password,
   );
 };
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model(
+  "User",
+  userSchema,
+);
 
 export default User;

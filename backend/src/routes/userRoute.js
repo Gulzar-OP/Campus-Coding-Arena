@@ -3,6 +3,10 @@ import express from "express";
 import {
   getMyStats,
   getStudentById,
+  getUnverifiedUsers,
+  getVerificationRequests,
+  removeVerificationRequest,
+  verifyStudent,
 } from "../controllers/userController.js";
 
 import {
@@ -42,5 +46,35 @@ router.get(
   ),
   getStudentById,
 );
+router.get(
+  "/unverified",
+  protect,
+  authorizeRoles(
+    "teacher",
+    "admin",
+  ),
+  getUnverifiedUsers,
+);
+router.get(
+  "/verification-requests",
+  protect,
+  authorizeRoles("teacher", "admin"),
+  getVerificationRequests,
+);
+
+router.patch(
+  "/:id/verify",
+  protect,
+  authorizeRoles("teacher", "admin"),
+  verifyStudent,
+);
+
+router.delete(
+  "/:id/remove-request",
+  protect,
+  authorizeRoles("teacher", "admin"),
+  removeVerificationRequest,
+);
 
 export default router;
+

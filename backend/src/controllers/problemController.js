@@ -777,40 +777,80 @@ export const updateProblem = async (req, res) => {
   }
 };
 
-export const deleteProblem = async (req, res) => {
+
+export const deleteProblem = async (
+  req,
+  res,
+) => {
   try {
     const { id } = req.params;
 
-    const problem = await Problem.findById(id);
-    if (
-      problem.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You cannot delete this problem",
-      });
-    }
+    const problem =
+      await Problem.findById(id);
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-        message: "Problem not found",
+        message:
+          "Problem not found",
       });
     }
 
-    await Problem.findByIdAndDelete(id);
+    if (
+      String(problem.createdBy) !==
+        String(req.user._id) &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not allowed to delete this problem",
+      });
+    }
+
+    // Check if problem is already used in any test
+    const testUsingProblem =
+      await Test.findOne({
+        "problems.problem": id,
+      }).select(
+        "_id title status",
+      );
+
+    if (testUsingProblem) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot delete this problem because it is already used in a test",
+        test: {
+          _id:
+            testUsingProblem._id,
+          title:
+            testUsingProblem.title,
+          status:
+            testUsingProblem.status,
+        },
+      });
+    }
+
+    await Problem.findByIdAndDelete(
+      id,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Problem deleted successfully",
+      message:
+        "Problem deleted successfully",
     });
   } catch (error) {
-    console.error("DELETE PROBLEM ERROR:", error);
+    console.error(
+      "DELETE PROBLEM ERROR:",
+      error,
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Failed to delete problem",
+      message:
+        "Failed to delete problem",
       error: error.message,
     });
   }

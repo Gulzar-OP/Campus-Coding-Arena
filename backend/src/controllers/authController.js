@@ -31,32 +31,30 @@ const sendTokenResponse = (user, statusCode, res) => {
 // REGISTER
 export const register = async (req, res) => {
   try {
-    const { name, email, password, branch, year, role } = req.body;
+    const {
+      name,
+      email,
+      password,
+      branch,
+      year,
+      rollNo,
+    } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !rollNo) {
       return res.status(400).json({
         success: false,
-        message: "Name, email and password are required",
+        message:
+          "Name, email, password and roll number are required",
       });
     }
 
-    // Only student or teacher allowed
-    const allowedRoles = ["student", "teacher"];
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
-    const selectedRole = role || "student";
-
-    if (!allowedRoles.includes(selectedRole)) {
-      return res.status(400).json({
-        success: false,
-        message: "Role must be either student or teacher",
+    const existingUser =
+      await User.findOne({
+        email: normalizedEmail,
       });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const existingUser = await User.findOne({
-      email: normalizedEmail,
-    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -65,27 +63,63 @@ export const register = async (req, res) => {
       });
     }
 
+    const existingRollNo =
+      await User.findOne({
+        rollNo: rollNo.trim(),
+      });
+
+    if (existingRollNo) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Roll number already registered",
+      });
+    }
+
     const user = await User.create({
       name: name.trim(),
-
       email: normalizedEmail,
-
       password,
 
-      role: selectedRole,
+      role: "student",
 
-      branch: selectedRole === "student" ? branch || "" : "",
+      rollNo: rollNo.trim(),
 
-      year: selectedRole === "student" && year ? Number(year) : undefined,
+      branch: branch?.trim() || "",
+
+      year: year
+        ? Number(year)
+        : undefined,
+
+      isVerified: false,
     });
 
-    sendTokenResponse(user, 201, res);
+    return res.status(201).json({
+      success: true,
+      message:
+        "Registration successful. Your account is waiting for verification.",
+
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        rollNo: user.rollNo,
+        branch: user.branch,
+        year: user.year,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
+    });
   } catch (error) {
-    console.error("Register error:", error);
+    console.error(
+      "Register error:",
+      error,
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Server error while registering user",
+      message:
+        "Server error while registering user",
       error: error.message,
     });
   }
@@ -122,8 +156,22 @@ export const login = async (req, res) => {
         message: "Invalid credentials",
       });
     }
+    if (
+      user.role === "student" &&
+      !user.isVerified
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your account has not been verified yet",
+      });
+    }
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(
+      user,
+      200,
+      res,
+    );
   } catch (error) {
     console.error(error);
 

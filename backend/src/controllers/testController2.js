@@ -1,3 +1,4 @@
+import Problem from "../models/Problem.js";
 import Test from "../models/test.js";
 import TestAttempt from "../models/testAttempt.js";
 
@@ -355,3 +356,61 @@ export const addProblemToTest = async (req, res) => {
       });
     }
   };
+
+  export const repairTestProblems = async (req, res) => {
+  try {
+    const test = await Test.findById(req.params.id);
+
+    if (!test) {
+      return res.status(404).json({
+        success: false,
+        message: "Test not found",
+      });
+    }
+
+    const repairedProblems = [];
+
+    for (const item of test.problems) {
+      const problemId =
+        item.problem?._id ||
+        item.problem;
+
+      if (!problemId) continue;
+
+      const exists =
+        await Problem.exists({
+          _id: problemId,
+        });
+
+      if (exists) {
+        repairedProblems.push(item);
+      }
+    }
+
+    test.problems =
+      repairedProblems;
+
+    await test.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Broken problem references removed",
+      remainingProblems:
+        repairedProblems.length,
+      test,
+    });
+  } catch (error) {
+    console.error(
+      "REPAIR TEST ERROR:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to repair test",
+      error: error.message,
+    });
+  }
+};

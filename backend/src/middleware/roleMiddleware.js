@@ -1,16 +1,7 @@
 export const authorizeRoles =
   (...roles) =>
   (req, res, next) => {
-    console.log("REQ USER:", req.user);
-    console.log(
-      "REQ USER ROLE:",
-      req.user?.role,
-    );
 
-    console.log(
-      "ALLOWED ROLES:",
-      roles,
-    );
 
     if (!req.user) {
       return res
