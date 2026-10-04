@@ -1,207 +1,428 @@
 import Problem from "../models/Problem.js";
 import createSlug from "../utils/createSlug.js";
 import Test from "../models/test.js";
+export const createProblem =
+  async (req, res) => {
+    try {
+      const {
+        testId,
 
-export const createProblem = async (req, res) => {
-  try {
-    const {
-      testId,
-
-      title,
-      topic,
-      difficulty,
-      description,
-
-      tags = [],
-      languages = [
-        "C++",
-        "Java",
-        "Python",
-      ],
-
-      inputFormat = "",
-      outputFormat = "",
-
-      constraints = [],
-      companies = [],
-
-      testCases = [],
-
-      timeLimit = 2,
-      memoryLimit = 256,
-
-      marks = 10,
-    } = req.body;
-
-    // ==============================
-    // REQUIRED FIELDS
-    // ==============================
-
-    if (
-      !title ||
-      !topic ||
-      !description
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Title, topic and description are required",
-      });
-    }
-
-    // ==============================
-    // GENERATE SLUG
-    // ==============================
-
-    const slug =
-      createSlug(title);
-
-    // ==============================
-    // CHECK DUPLICATE PROBLEM
-    // ==============================
-
-    const existingProblem =
-      await Problem.findOne({
-        slug,
-      });
-
-    if (existingProblem) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "Problem with this title already exists",
-      });
-    }
-
-    // ==============================
-    // IF TEST ID PROVIDED
-    // CHECK TEST
-    // ==============================
-
-    let test = null;
-
-    if (testId) {
-      test =
-        await Test.findById(
-          testId,
-        );
-
-      if (!test) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Test not found",
-        });
-      }
-
-      // Optional:
-      // Only creator/admin should modify test
-
-      if (
-        String(
-          test.createdBy,
-        ) !==
-          String(
-            req.user._id,
-          ) &&
-        req.user.role !==
-          "admin"
-      ) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You cannot add problems to this test",
-        });
-      }
-    }
-
-    // ==============================
-    // CREATE PROBLEM
-    // ==============================
-
-    const problem =
-      await Problem.create({
         title,
-        slug,
         topic,
-        difficulty:
-          difficulty ||
-          "Easy",
-
+        difficulty,
         description,
 
-        tags,
-        languages,
+        timeComplexity = "",
+        spaceComplexity = "",
 
-        inputFormat,
-        outputFormat,
+        tags = [],
 
-        constraints,
+        languages = [
+          "C++",
+          "Java",
+          "Python",
+        ],
 
-        companies,
+        inputFormat = "",
+        outputFormat = "",
 
-        testCases,
+        constraints = [],
+        companies = [],
 
-        timeLimit,
-        memoryLimit,
+        testCases = [],
 
-        createdBy:
-          req.user._id,
-      });
+        timeLimit = 2,
+        memoryLimit = 256,
+      } = req.body;
 
-    // ==============================
-    // IF TEST ID PROVIDED
-    // ADD PROBLEM TO TEST
-    // ==============================
+      // =====================================
+      // REQUIRED
+      // =====================================
 
-    if (test) {
-      test.problems.push({
-        problem:
-          problem._id,
+      if (
+        !title?.trim() ||
+        !topic?.trim() ||
+        !description?.trim()
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
 
-        marks:
-          Number(marks) ||
-          10,
-      });
+            message:
+              "Title, topic and description are required",
+          });
+      }
 
-      await test.save();
+      // =====================================
+      // VALIDATE ARRAYS
+      // =====================================
+
+      if (
+        !Array.isArray(
+          tags,
+        ) ||
+        !Array.isArray(
+          languages,
+        ) ||
+        !Array.isArray(
+          constraints,
+        ) ||
+        !Array.isArray(
+          companies,
+        ) ||
+        !Array.isArray(
+          testCases,
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            message:
+              "Invalid problem data",
+          });
+      }
+
+      // =====================================
+      // TEST CASE VALIDATION
+      // =====================================
+
+      if (
+        testCases.length ===
+        0
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            message:
+              "At least one test case is required",
+          });
+      }
+
+      for (
+        let i = 0;
+        i <
+        testCases.length;
+        i++
+      ) {
+        const testCase =
+          testCases[i];
+
+        if (
+          typeof testCase.input !==
+            "string" ||
+          !testCase.input.trim()
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              message: `Test case ${
+                i + 1
+              }: input is required`,
+            });
+        }
+
+        if (
+          typeof testCase.expectedOutput !==
+            "string" ||
+          !testCase.expectedOutput.trim()
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              message: `Test case ${
+                i + 1
+              }: expected output is required`,
+            });
+        }
+      }
+
+      // =====================================
+      // LIMITS
+      // =====================================
+
+      const parsedTimeLimit =
+        Number(
+          timeLimit,
+        );
+
+      const parsedMemoryLimit =
+        Number(
+          memoryLimit,
+        );
+
+      if (
+        Number.isNaN(
+          parsedTimeLimit,
+        ) ||
+        parsedTimeLimit <= 0
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            message:
+              "Time limit must be greater than 0",
+          });
+      }
+
+      if (
+        Number.isNaN(
+          parsedMemoryLimit,
+        ) ||
+        parsedMemoryLimit <=
+          0
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            message:
+              "Memory limit must be greater than 0",
+          });
+      }
+
+      // =====================================
+      // SLUG
+      // =====================================
+
+      const slug =
+        createSlug(
+          title.trim(),
+        );
+
+      const existingProblem =
+        await Problem.findOne({
+          slug,
+        });
+
+      if (
+        existingProblem
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            message:
+              "Problem with this title already exists",
+          });
+      }
+
+      // =====================================
+      // OPTIONAL TEST
+      // =====================================
+
+      let test =
+        null;
+
+      if (testId) {
+        test =
+          await Test.findById(
+            testId,
+          );
+
+        if (!test) {
+          return res
+            .status(404)
+            .json({
+              success:
+                false,
+
+              message:
+                "Test not found",
+            });
+        }
+
+        if (
+          String(
+            test.createdBy,
+          ) !==
+            String(
+              req.user
+                ._id,
+            ) &&
+          req.user
+            .role !==
+            "admin"
+        ) {
+          return res
+            .status(403)
+            .json({
+              success:
+                false,
+
+              message:
+                "You cannot add problems to this test",
+            });
+        }
+
+        if (
+          test.status !==
+          "draft"
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              message:
+                "Problems can only be added to draft tests",
+            });
+        }
+      }
+
+      // =====================================
+      // CREATE
+      // =====================================
+
+      const problem =
+        await Problem.create({
+          title:
+            title.trim(),
+
+          slug,
+
+          topic:
+            topic.trim(),
+
+          difficulty:
+            difficulty ||
+            "Easy",
+
+          description:
+            description.trim(),
+
+          timeComplexity:
+            String(
+              timeComplexity,
+            ).trim(),
+
+          spaceComplexity:
+            String(
+              spaceComplexity,
+            ).trim(),
+
+          tags,
+
+          languages,
+
+          inputFormat:
+            String(
+              inputFormat,
+            ).trim(),
+
+          outputFormat:
+            String(
+              outputFormat,
+            ).trim(),
+
+          constraints,
+
+          companies,
+
+          testCases:
+            testCases.map(
+              (
+                testCase,
+              ) => ({
+                input:
+                  testCase.input,
+
+                expectedOutput:
+                  testCase.expectedOutput,
+
+                isHidden:
+                  Boolean(
+                    testCase.isHidden,
+                  ),
+              }),
+            ),
+
+          timeLimit:
+            parsedTimeLimit,
+
+          memoryLimit:
+            parsedMemoryLimit,
+
+          createdBy:
+            req.user._id,
+        });
+
+      // =====================================
+      // ADD TO TEST
+      // =====================================
+
+      if (test) {
+        test.problems.push({
+          problem:
+            problem._id,
+        });
+
+        await test.save();
+      }
+
+      return res
+        .status(201)
+        .json({
+          success:
+            true,
+
+          message:
+            test
+              ? "Problem created and added to test successfully"
+              : "Problem created successfully",
+
+          problem,
+
+          addedToTest:
+            Boolean(
+              test,
+            ),
+
+          testId:
+            test?._id ||
+            null,
+        });
+    } catch (error) {
+      console.error(
+        "CREATE PROBLEM ERROR:",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          success:
+            false,
+
+          message:
+            "Failed to create problem",
+
+          error:
+            error.message,
+        });
     }
-
-    // ==============================
-    // RESPONSE
-    // ==============================
-
-    return res.status(201).json({
-      success: true,
-
-      message:
-        test
-          ? "Problem created and added to test successfully"
-          : "Problem created successfully",
-
-      problem,
-
-      addedToTest:
-        Boolean(test),
-
-      testId:
-        test?._id || null,
-    });
-  } catch (error) {
-    console.error(
-      "CREATE PROBLEM ERROR:",
-      error,
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to create problem",
-      error:
-        error.message,
-    });
-  }
-};
+  };
 
 // GET ALL PROBLEMS
 export const getAllProblems = async (req, res) => {
@@ -390,6 +611,8 @@ export const updateProblem = async (req, res) => {
       topic,
       difficulty,
       description,
+    timeComplexity,
+    spaceComplexity,
       tags,
       languages,
       inputFormat,
@@ -522,8 +745,28 @@ export const updateProblem = async (req, res) => {
       }
 
       problem.description =
-        description;
+        description.trim();
     }
+if (
+  timeComplexity !==
+  undefined
+) {
+  problem.timeComplexity =
+    String(
+      timeComplexity,
+    ).trim();
+}
+
+if (
+  spaceComplexity !==
+  undefined
+) {
+  problem.spaceComplexity =
+    String(
+      spaceComplexity,
+    ).trim();
+}
+    
 
     // ==============================
     // ARRAY FIELDS

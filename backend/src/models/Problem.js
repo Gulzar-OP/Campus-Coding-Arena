@@ -116,6 +116,17 @@ const problemSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    timeComplexity: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    spaceComplexity: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   {
     timestamps: true,

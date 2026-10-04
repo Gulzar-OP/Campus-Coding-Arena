@@ -36,11 +36,6 @@ const problemSubmissionSchema =
         default: 0,
       },
 
-      marks: {
-        type: Number,
-        default: 0,
-      },
-
       executionTime: {
         type: Number,
         default: null,
@@ -85,11 +80,6 @@ const submissionSchema =
           problemSubmissionSchema,
         ],
         default: [],
-      },
-
-      totalMarks: {
-        type: Number,
-        default: 0,
       },
 
       submittedAt: {

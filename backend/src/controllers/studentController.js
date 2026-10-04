@@ -25,7 +25,7 @@ export const getStudentDashboard = async (req, res) => {
       });
 
     // --------------------------------------------------------
-    // Temporary active attempts
+    // Temporary attempts
     // --------------------------------------------------------
 
     const attempts = await TestAttempt.find({
@@ -42,7 +42,7 @@ export const getStudentDashboard = async (req, res) => {
     });
 
     // --------------------------------------------------------
-    // Attempt map
+    // Build attempt map
     // testId -> attempt
     // --------------------------------------------------------
 
@@ -53,7 +53,7 @@ export const getStudentDashboard = async (req, res) => {
     });
 
     // --------------------------------------------------------
-    // Submission map
+    // Build submission map
     // testId -> submission
     // --------------------------------------------------------
 
@@ -64,7 +64,7 @@ export const getStudentDashboard = async (req, res) => {
     });
 
     // --------------------------------------------------------
-    // Build student-specific test data
+    // Build dashboard data
     // --------------------------------------------------------
 
     const dashboardTests = tests.map((test) => {
@@ -75,7 +75,7 @@ export const getStudentDashboard = async (req, res) => {
       const submission = submissionMap.get(testId);
 
       // ------------------------------------------------------
-      // Test availability status
+      // Test lifecycle status
       // ------------------------------------------------------
 
       let testStatus;
@@ -93,7 +93,7 @@ export const getStudentDashboard = async (req, res) => {
       }
 
       // ------------------------------------------------------
-      // Student attempt status
+      // Student-specific attempt status
       // ------------------------------------------------------
 
       let attemptStatus = "not_started";
@@ -104,27 +104,64 @@ export const getStudentDashboard = async (req, res) => {
         attemptStatus = attempt.status;
       }
 
+      // ------------------------------------------------------
+      // Question stats
+      // ------------------------------------------------------
+
+      const totalProblems = test.problems.length;
+
+      const attemptedProblems = submission
+        ? submission.problems?.length || 0
+        : attempt
+          ? attempt.problemResults.filter(
+              (item) => item.status !== "not_attempted",
+            ).length
+          : 0;
+
+      const solvedProblems = submission
+        ? submission.problems?.filter((item) => item.verdict === "Accepted")
+            .length || 0
+        : attempt
+          ? attempt.problemResults.filter((item) => item.status === "passed")
+              .length
+          : 0;
+
       return {
         id: test._id,
         _id: test._id,
+
         title: test.title,
+
         description: test.description,
+
         duration: test.duration,
+
         startTime: test.startTime,
+
         endTime: test.endTime,
+
         testStatus,
+
         attemptStatus,
-        totalProblems: test.problems.length,
+
+        totalProblems,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        unsolvedProblems: Math.max(totalProblems - solvedProblems, 0),
+
         maxAIPrompts: test.maxAIPrompts,
+
         aiPromptsUsed: attempt?.aiPromptsUsed || 0,
-        totalMarks: submission?.totalMarks || 0,
+
         submittedAt: submission?.submittedAt || null,
       };
     });
 
     // --------------------------------------------------------
-    // Live
-    // Submitted test live me dobara nahi aayega
+    // Live tests
     // --------------------------------------------------------
 
     const live = dashboardTests.filter(
@@ -133,7 +170,7 @@ export const getStudentDashboard = async (req, res) => {
     );
 
     // --------------------------------------------------------
-    // Upcoming
+    // Upcoming tests
     // --------------------------------------------------------
 
     const upcoming = dashboardTests.filter(
@@ -142,8 +179,8 @@ export const getStudentDashboard = async (req, res) => {
     );
 
     // --------------------------------------------------------
-    // Completed
-    // Only actual submitted tests
+    // Completed tests
+    // Only actually submitted tests
     // --------------------------------------------------------
 
     const completed = dashboardTests.filter(
@@ -151,8 +188,8 @@ export const getStudentDashboard = async (req, res) => {
     );
 
     // --------------------------------------------------------
-    // Missed
-    // Test ended but student never submitted
+    // Missed tests
+    // Test ended but user never submitted
     // --------------------------------------------------------
 
     const missed = dashboardTests.filter(
@@ -185,7 +222,9 @@ export const getStudentDashboard = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch student dashboard",
+
       error: error.message,
     });
   }
@@ -197,28 +236,55 @@ export const getStudentDashboard = async (req, res) => {
 
 export const getMyResults = async (req, res) => {
   try {
-    // TestAttempt use nahi karenge because
-    // finish hone ke baad attempt delete ho jata hai.
+    // --------------------------------------------------------
+    // Permanent submissions only
+    // TestAttempt finish ke baad delete ho jata hai
+    // --------------------------------------------------------
 
     const submissions = await Submission.find({
       user: req.user._id,
       status: "submitted",
     })
-      .populate("test", "title description duration startTime endTime")
+      .populate("test", "title description duration startTime endTime problems")
       .populate("problems.problem", "title difficulty topic")
       .sort({
         submittedAt: -1,
         updatedAt: -1,
       });
 
-    const results = submissions.map((submission) => ({
-      submissionId: submission._id,
-      test: submission.test,
-      status: submission.status,
-      totalMarks: submission.totalMarks || 0,
-      submittedAt: submission.submittedAt || submission.updatedAt,
-      problems: submission.problems || [],
-    }));
+    // --------------------------------------------------------
+    // Format results
+    // --------------------------------------------------------
+
+    const results = submissions.map((submission) => {
+      const totalProblems = submission.test?.problems?.length || 0;
+
+      const attemptedProblems = submission.problems?.length || 0;
+
+      const solvedProblems =
+        submission.problems?.filter((item) => item.verdict === "Accepted")
+          .length || 0;
+
+      return {
+        submissionId: submission._id,
+
+        test: submission.test,
+
+        status: submission.status,
+
+        totalProblems,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        unsolvedProblems: Math.max(totalProblems - solvedProblems, 0),
+
+        submittedAt: submission.submittedAt || submission.updatedAt,
+
+        problems: submission.problems || [],
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -232,7 +298,9 @@ export const getMyResults = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch results",
+
       error: error.message,
     });
   }
@@ -247,7 +315,7 @@ export const getResultByTest = async (req, res) => {
     const { testId } = req.params;
 
     // --------------------------------------------------------
-    // Get test
+    // GET TEST
     // --------------------------------------------------------
 
     const test = await Test.findById(testId).populate(
@@ -258,30 +326,33 @@ export const getResultByTest = async (req, res) => {
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
     // --------------------------------------------------------
-    // Get student's permanent submission
+    // GET PERMANENT SUBMISSION
     // --------------------------------------------------------
 
     const submission = await Submission.findOne({
       test: testId,
+
       user: req.user._id,
+
       status: "submitted",
     }).populate("problems.problem", "title difficulty topic");
 
     if (!submission) {
       return res.status(404).json({
         success: false,
+
         message: "Result not found for this test",
       });
     }
 
     // --------------------------------------------------------
-    // Create map
-    // problemId -> submitted problem
+    // Build submitted problem map
     // --------------------------------------------------------
 
     const submittedProblemMap = new Map();
@@ -296,7 +367,7 @@ export const getResultByTest = async (req, res) => {
     });
 
     // --------------------------------------------------------
-    // Build result for every problem in test
+    // Build result for every test problem
     // --------------------------------------------------------
 
     const results = test.problems
@@ -322,44 +393,75 @@ export const getResultByTest = async (req, res) => {
             topic: problem.topic,
           },
 
-          maxMarks: Number(entry.marks || 0),
           submitted: Boolean(submittedProblem),
+
           verdict: submittedProblem?.verdict || "Not Attempted",
+
           passedTestCases: submittedProblem?.passedTestCases || 0,
+
           totalTestCases: submittedProblem?.totalTestCases || 0,
+
           language: submittedProblem?.language || null,
-          marks: submittedProblem?.marks || 0,
+
           executionTime: submittedProblem?.executionTime ?? null,
+
           memory: submittedProblem?.memory ?? null,
+
           submittedAt: submittedProblem?.submittedAt || null,
         };
       })
       .filter(Boolean);
 
     // --------------------------------------------------------
-    // Total maximum marks of test
+    // Question statistics
     // --------------------------------------------------------
 
-    const maximumMarks = test.problems.reduce(
-      (total, entry) => total + Number(entry.marks || 0),
-      0,
-    );
+    const totalProblems = test.problems.length;
+
+    const attemptedProblems = submission.problems.length;
+
+    const solvedProblems = submission.problems.filter(
+      (item) => item.verdict === "Accepted",
+    ).length;
+
+    const failedProblems = submission.problems.filter(
+      (item) => item.verdict !== "Accepted",
+    ).length;
+
+    const notAttemptedProblems = Math.max(totalProblems - attemptedProblems, 0);
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
 
     return res.status(200).json({
       success: true,
 
       test: {
         _id: test._id,
+
         title: test.title,
+
         description: test.description,
+
         duration: test.duration,
+
+        totalProblems,
       },
 
       submission: {
         _id: submission._id,
+
         status: submission.status,
-        totalMarks: submission.totalMarks || 0,
-        maximumMarks,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        failedProblems,
+
+        notAttemptedProblems,
+
         submittedAt: submission.submittedAt || submission.updatedAt,
       },
 
@@ -370,7 +472,9 @@ export const getResultByTest = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to load result",
+
       error: error.message,
     });
   }
@@ -378,7 +482,7 @@ export const getResultByTest = async (req, res) => {
 
 // ============================================================
 // GET ALL STUDENTS
-// Teacher side
+// TEACHER SIDE
 // ============================================================
 
 export const allStudent = async (req, res) => {
@@ -425,7 +529,7 @@ export const allStudent = async (req, res) => {
     const studentIds = students.map((student) => student._id);
 
     // --------------------------------------------------------
-    // Get all submitted tests for current page students
+    // Get permanent submitted tests
     // --------------------------------------------------------
 
     const submissions = await Submission.find({
@@ -435,12 +539,11 @@ export const allStudent = async (req, res) => {
 
       status: "submitted",
     })
-      .select("user totalMarks")
+      .select("user test problems submittedAt")
       .lean();
 
     // --------------------------------------------------------
-    // Build stats map
-    // Avoid one DB query per student
+    // Stats map
     // --------------------------------------------------------
 
     const statsMap = new Map();
@@ -452,7 +555,9 @@ export const allStudent = async (req, res) => {
         statsMap.set(userId, {
           testsAttempted: 0,
 
-          totalMarks: 0,
+          totalQuestionsAttempted: 0,
+
+          totalQuestionsSolved: 0,
         });
       }
 
@@ -460,23 +565,34 @@ export const allStudent = async (req, res) => {
 
       stats.testsAttempted += 1;
 
-      stats.totalMarks += Number(submission.totalMarks || 0);
+      stats.totalQuestionsAttempted += submission.problems?.length || 0;
+
+      stats.totalQuestionsSolved +=
+        submission.problems?.filter((item) => item.verdict === "Accepted")
+          .length || 0;
     });
 
     // --------------------------------------------------------
-    // Combine student data + stats
+    // Combine student + stats
     // --------------------------------------------------------
 
     const studentsWithStats = students.map((student) => {
       const stats = statsMap.get(student._id.toString()) || {
         testsAttempted: 0,
 
-        totalMarks: 0,
+        totalQuestionsAttempted: 0,
+
+        totalQuestionsSolved: 0,
       };
 
-      const averageMarks =
-        stats.testsAttempted > 0
-          ? Number((stats.totalMarks / stats.testsAttempted).toFixed(2))
+      const solveRate =
+        stats.totalQuestionsAttempted > 0
+          ? Number(
+              (
+                (stats.totalQuestionsSolved / stats.totalQuestionsAttempted) *
+                100
+              ).toFixed(2),
+            )
           : 0;
 
       return {
@@ -484,28 +600,40 @@ export const allStudent = async (req, res) => {
 
         stats: {
           solvedProblems: student.solvedProblems?.length || 0,
+
           testsAttempted: stats.testsAttempted,
-          totalMarks: stats.totalMarks,
-          averageMarks,
+
+          totalQuestionsAttempted: stats.totalQuestionsAttempted,
+
+          totalQuestionsSolved: stats.totalQuestionsSolved,
+
+          solveRate,
         },
       };
     });
 
     // --------------------------------------------------------
-    // Pagination response
+    // Pagination
     // --------------------------------------------------------
 
     const totalPages = Math.ceil(totalStudents / limit);
 
     return res.status(200).json({
       success: true,
+
       students: studentsWithStats,
+
       pagination: {
         currentPage: page,
+
         totalPages,
+
         totalStudents,
+
         limit,
+
         hasNextPage: page < totalPages,
+
         hasPrevPage: page > 1,
       },
     });
@@ -514,7 +642,9 @@ export const allStudent = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch students",
+
       error: error.message,
     });
   }

@@ -8,12 +8,6 @@ const testProblemSchema =
         ref: "Problem",
         required: true,
       },
-
-      marks: {
-        type: Number,
-        default: 10,
-        min: 0,
-      },
     },
     {
       _id: false,

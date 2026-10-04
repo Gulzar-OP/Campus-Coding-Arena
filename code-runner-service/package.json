@@ -1,0 +1,21 @@
+{
+  "name": "campus-coding-arena-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deployment-ready C++17 and Java 17 code runner for Campus Coding Arena",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0"
+  }
+}

@@ -12,6 +12,7 @@ import {
   authorizeRoles,
 } from "../middleware/roleMiddleware.js";
 import { getStudentById } from "../controllers/userController.js";
+import { getTeacherDashboard } from "../controllers/teacherController.js";
 
 const router =
   express.Router();
@@ -37,5 +38,15 @@ router.get(
   ),
   getStudentById,
 );
+router.get(
+  "/dashboard",
+  protect,
+  authorizeRoles(
+    "teacher",
+    "admin",
+  ),
+  getTeacherDashboard,
+);
+
 
 export default router;

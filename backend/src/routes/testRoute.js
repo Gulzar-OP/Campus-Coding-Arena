@@ -16,7 +16,7 @@ import {
   joinTest,
   getTestParticipants,
 } from "../controllers/testController.js";
-import { getMyAttempt, repairTestProblems } from "../controllers/testController2.js";
+import { getMyAttempt, getParticipantDetails, repairTestProblems } from "../controllers/testController2.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
@@ -83,6 +83,15 @@ router.get(
   "/:id/participants",
   authorizeRoles("teacher", "admin"),
   getTestParticipants,
+);
+router.get(
+  "/:testId/participants/:studentId",
+  protect,
+  authorizeRoles(
+    "teacher",
+    "admin",
+  ),
+  getParticipantDetails,
 );
 
 router.get(

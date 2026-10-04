@@ -1,155 +1,78 @@
+import mongoose from "mongoose";
+
 import Test from "../models/test.js";
 import Problem from "../models/Problem.js";
 import TestAttempt from "../models/testAttempt.js";
-import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
-import generateAccessCode from "../utils/generateAccessCode.js";
-import mongoose from "mongoose";
 import Submission from "../models/submission.js";
 import User from "../models/user.js";
-// ==============================
+
+import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
+
+import generateAccessCode from "../utils/generateAccessCode.js";
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+const isTestOwnerOrAdmin = (test, user) => {
+  return (
+    test.createdBy.toString() === user._id.toString() || user.role === "admin"
+  );
+};
+
+const normalizeProblemEntries = (problems = []) => {
+  return problems.map((item) => ({
+    problem:
+      typeof item === "string" ? item : item?.problem?._id || item?.problem,
+  }));
+};
+
+const validateProblemIds = (problemEntries = []) => {
+  return problemEntries.every(
+    (item) => item.problem && mongoose.Types.ObjectId.isValid(item.problem),
+  );
+};
+
+const getUniqueProblemIds = (problemEntries = []) => {
+  return [...new Set(problemEntries.map((item) => String(item.problem)))];
+};
+
+const sanitizeProblemForStudent = (problem) => {
+  if (!problem) {
+    return null;
+  }
+
+  const plainProblem =
+    typeof problem.toObject === "function"
+      ? problem.toObject()
+      : {
+          ...problem,
+        };
+
+  if (Array.isArray(plainProblem.testCases)) {
+    plainProblem.testCases = plainProblem.testCases
+      .filter((item) => !item.isHidden)
+      .map((item) => ({
+        input: item.input,
+
+        expectedOutput: item.expectedOutput,
+
+        isHidden: false,
+      }));
+  }
+
+  return plainProblem;
+};
+
+// ============================================================
 // CREATE TEST
-// ==============================
-
-// export const createTest = async (
-//   req,
-//   res,
-// ) => {
-//   try {
-//     const {
-//       title,
-//       description,
-//       problems,
-//       duration,
-//       startTime,
-//       endTime,
-//       maxAIPrompts = 3,
-//     } = req.body;
-
-//     if (
-//       !title ||
-//       !duration ||
-//       !startTime ||
-//       !endTime
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Title, duration, startTime and endTime are required",
-//       });
-//     }
-
-//     const start = new Date(startTime);
-//     const end = new Date(endTime);
-
-//     if (
-//       Number.isNaN(start.getTime()) ||
-//       Number.isNaN(end.getTime())
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Invalid start or end time",
-//       });
-//     }
-
-//     if (end <= start) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "End time must be after start time",
-//       });
-//     }
-
-//     if (
-//       maxAIPrompts < 0 ||
-//       maxAIPrompts > 3
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Maximum AI prompts allowed is 3",
-//       });
-//     }
-
-//     // Validate problems
-//     if (
-//       problems &&
-//       problems.length > 0
-//     ) {
-//       const problemIds =
-//         problems.map(
-//           (item) =>
-//             item.problem,
-//         );
-
-//       const foundProblems =
-//         await Problem.find({
-//           _id: {
-//             $in: problemIds,
-//           },
-//         });
-
-//       if (
-//         foundProblems.length !==
-//         problemIds.length
-//       ) {
-//         return res.status(400).json({
-//           success: false,
-//           message:
-//             "One or more problems are invalid",
-//         });
-//       }
-//     }
-//     let accessCode;
-//     let exists = true;
-
-//     while (exists) {
-//     accessCode =
-//         generateAccessCode();
-
-//     exists =
-//         await Test.exists({
-//         accessCode,
-//         });
-//     }
-
-// const test = await Test.create({
-//   title,
-//   description,
-//   problems,
-//   duration,
-//   startTime: start,
-//   endTime: end,
-//   maxAIPrompts,
-
-//   accessCode,
-
-//   createdBy:
-//     req.user._id,
-// });
-
-//     return res.status(201).json({
-//       success: true,
-//       message:
-//         "Test created successfully",
-//       test,
-//     });
-//   } catch (error) {
-//     return res.status(500).json({
-//       success: false,
-//       message:
-//         "Failed to create test",
-//       error:
-//         error.message,
-//     });
-//   }
-// };
+// ============================================================
 
 export const createTest = async (req, res) => {
   try {
     const {
       title,
-      description,
+      description = "",
       duration,
       startTime,
       endTime,
@@ -158,84 +81,194 @@ export const createTest = async (req, res) => {
       allowDirectAccess = false,
     } = req.body;
 
-    if (!title || !duration || !startTime || !endTime) {
+    // --------------------------------------------------------
+    // BASIC VALIDATION
+    // --------------------------------------------------------
+
+    if (!title?.trim() || !duration || !startTime || !endTime) {
       return res.status(400).json({
         success: false,
+
         message: "Title, duration, start time and end time are required",
       });
     }
+
+    const numericDuration = Number(duration);
+
+    const numericMaxAIPrompts = Number(maxAIPrompts);
+
+    if (!Number.isFinite(numericDuration) || numericDuration <= 0) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Duration must be greater than 0",
+      });
+    }
+
+    if (
+      !Number.isInteger(numericMaxAIPrompts) ||
+      numericMaxAIPrompts < 0 ||
+      numericMaxAIPrompts > 3
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Maximum AI prompts must be between 0 and 3",
+      });
+    }
+
+    // --------------------------------------------------------
+    // DATE VALIDATION
+    // --------------------------------------------------------
 
     const start = new Date(startTime);
 
     const end = new Date(endTime);
 
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Invalid start time or end time",
+      });
+    }
+
     if (end <= start) {
       return res.status(400).json({
         success: false,
+
         message: "End time must be after start time",
       });
     }
 
-    // Validate selected problems
-    if (problems.length > 0) {
-      const problemIds = problems.map((item) => item.problem);
+    // --------------------------------------------------------
+    // NORMALIZE PROBLEMS
+    //
+    // No marks now.
+    //
+    // [
+    //   {
+    //     problem: ObjectId
+    //   }
+    // ]
+    // --------------------------------------------------------
 
+    const normalizedProblems = normalizeProblemEntries(problems);
+
+    if (
+      normalizedProblems.length > 0 &&
+      !validateProblemIds(normalizedProblems)
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message: "One or more selected problem IDs are invalid",
+      });
+    }
+
+    // --------------------------------------------------------
+    // DUPLICATE PROBLEM CHECK
+    // --------------------------------------------------------
+
+    const problemIds = getUniqueProblemIds(normalizedProblems);
+
+    if (problemIds.length !== normalizedProblems.length) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Duplicate problems are not allowed in a test",
+      });
+    }
+
+    // --------------------------------------------------------
+    // CHECK PROBLEMS EXIST
+    // --------------------------------------------------------
+
+    if (problemIds.length > 0) {
       const existingProblems = await Problem.countDocuments({
         _id: {
           $in: problemIds,
         },
+
         isActive: true,
       });
 
       if (existingProblems !== problemIds.length) {
         return res.status(400).json({
           success: false,
-          message: "One or more selected problems are invalid",
+
+          message: "One or more selected problems are invalid or inactive",
         });
       }
     }
-    let accessCode;
-    let exists = true;
 
-    while (exists) {
+    // --------------------------------------------------------
+    // UNIQUE ACCESS CODE
+    // --------------------------------------------------------
+
+    let accessCode;
+
+    let codeExists = true;
+
+    while (codeExists) {
       accessCode = generateAccessCode();
 
-      exists = await Test.exists({
+      codeExists = await Test.exists({
         accessCode,
       });
     }
 
+    // --------------------------------------------------------
+    // CREATE TEST
+    // --------------------------------------------------------
+
     const test = await Test.create({
-      title,
+      title: title.trim(),
+
       description,
-      duration,
-      startTime,
-      endTime,
-      problems,
-      maxAIPrompts,
-      allowDirectAccess,
+
+      duration: numericDuration,
+
+      startTime: start,
+
+      endTime: end,
+
+      problems: normalizedProblems,
+
+      maxAIPrompts: numericMaxAIPrompts,
+
+      allowDirectAccess: Boolean(allowDirectAccess),
+
       accessCode,
+
       createdBy: req.user._id,
+
       status: "draft",
     });
 
     return res.status(201).json({
       success: true,
+
       message: "Test created successfully",
+
       test,
     });
   } catch (error) {
+    console.error("CREATE TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to create test",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // GET ALL TESTS
-// ==============================
+// ============================================================
 
 export const getAllTests = async (req, res) => {
   try {
@@ -243,27 +276,36 @@ export const getAllTests = async (req, res) => {
       isActive: true,
     };
 
-    // students only published tests dekhenge
+    // Student only published tests dekhega
+
     if (req.user?.role === "student") {
       filter.status = "published";
     }
 
     const tests = await Test.find(filter)
       .populate("createdBy", "name email")
+
       .populate("problems.problem", "title slug difficulty topic")
+
       .sort({
         createdAt: -1,
       });
 
     return res.status(200).json({
       success: true,
+
       count: tests.length,
+
       tests,
     });
   } catch (error) {
+    console.error("GET ALL TESTS ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch tests",
+
       error: error.message,
     });
   }
@@ -271,193 +313,101 @@ export const getAllTests = async (req, res) => {
 
 // ============================================================
 // GET SINGLE TEST
-// GET /api/tests/:id
 // ============================================================
 
 export const getTestById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // ==========================================
-    // VALIDATE TEST ID
-    // ==========================================
+    // --------------------------------------------------------
+    // VALIDATE ID
+    // --------------------------------------------------------
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
+
         message: "Invalid test id",
       });
     }
 
-    // ==========================================
+    // --------------------------------------------------------
     // GET TEST
-    // IMPORTANT:
-    // Problems ko populate nahi kar rahe.
-    // Manual fetch karenge.
-    // ==========================================
+    // --------------------------------------------------------
 
     const test = await Test.findById(id)
       .populate({
         path: "createdBy",
+
         select: "name email role",
       })
-      .lean();
+
+      .populate({
+        path: "problems.problem",
+      });
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    console.log("RAW TEST PROBLEMS:", JSON.stringify(test.problems, null, 2));
+    // --------------------------------------------------------
+    // STUDENT ACCESS CHECK
+    // --------------------------------------------------------
 
-    // ==========================================
-    // VALIDATE PROBLEMS
-    // ==========================================
+    if (req.user?.role === "student") {
+      if (test.status !== "published" || test.isActive === false) {
+        return res.status(404).json({
+          success: false,
 
-    if (!Array.isArray(test.problems) || test.problems.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No problems found in this test",
-      });
-    }
-
-    // ==========================================
-    // EXTRACT PROBLEM IDS
-    // ==========================================
-
-    const problemIds = test.problems
-      .map((entry) => {
-        // Expected:
-        //
-        // {
-        //   problem: ObjectId,
-        //   marks: 10
-        // }
-
-        if (!entry) {
-          return null;
-        }
-
-        // populated object
-        if (
-          entry.problem &&
-          typeof entry.problem === "object" &&
-          entry.problem._id
-        ) {
-          return String(entry.problem._id);
-        }
-
-        // ObjectId / string
-        if (entry.problem) {
-          return String(entry.problem);
-        }
-
-        return null;
-      })
-      .filter(Boolean);
-
-    console.log("PROBLEM IDS:", problemIds);
-
-    if (problemIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Test contains invalid problem references",
-      });
-    }
-
-    // ==========================================
-    // FETCH ALL ACTUAL PROBLEMS
-    // ==========================================
-
-    const problems = await Problem.find({
-      _id: {
-        $in: problemIds,
-      },
-    }).lean();
-
-    console.log("FOUND PROBLEMS:", JSON.stringify(problems, null, 2));
-
-    // ==========================================
-    // CREATE LOOKUP MAP
-    // ==========================================
-
-    const problemMap = new Map();
-
-    problems.forEach((problem) => {
-      problemMap.set(String(problem._id), problem);
-    });
-
-    // ==========================================
-    // HYDRATE TEST PROBLEMS
-    // ==========================================
-
-    const hydratedProblems = test.problems.map((entry, index) => {
-      let problemId = null;
-
-      if (
-        entry?.problem &&
-        typeof entry.problem === "object" &&
-        entry.problem._id
-      ) {
-        problemId = String(entry.problem._id);
-      } else if (entry?.problem) {
-        problemId = String(entry.problem);
+          message: "Test not found",
+        });
       }
+    }
 
-      const actualProblem = problemMap.get(problemId);
+    const plainTest = test.toObject();
 
-      console.log(`ENTRY ${index}:`, {
-        problemId,
-        found: Boolean(actualProblem),
-      });
+    // --------------------------------------------------------
+    // HIDE HIDDEN TEST CASES FROM STUDENT
+    // --------------------------------------------------------
 
-      return {
-        problem: actualProblem || null,
+    if (req.user?.role === "student") {
+      plainTest.problems = plainTest.problems.map((entry) => ({
+        problem: sanitizeProblemForStudent(entry.problem),
 
-        problemId,
+        problemId: entry.problem?._id || entry.problem || null,
+      }));
+    } else {
+      plainTest.problems = plainTest.problems.map((entry) => ({
+        problem: entry.problem,
 
-        marks: Number(entry?.marks ?? 10),
-      };
-    });
+        problemId: entry.problem?._id || entry.problem || null,
+      }));
+    }
 
-    // ==========================================
-    // CHECK BROKEN REFERENCES
-    // ==========================================
+    // --------------------------------------------------------
+    // BROKEN REFERENCES
+    // --------------------------------------------------------
 
-    const missingProblems = hydratedProblems.filter((entry) => !entry.problem);
+    const hasMissingProblem = plainTest.problems.some(
+      (entry) => !entry.problem,
+    );
 
-    if (missingProblems.length > 0) {
-      console.error("MISSING PROBLEMS:", missingProblems);
-
+    if (hasMissingProblem) {
       return res.status(400).json({
         success: false,
 
         message: "Some problems assigned to this test no longer exist",
-
-        missingProblemIds: missingProblems.map((item) => item.problemId),
       });
     }
 
-    // ==========================================
-    // RESPONSE
-    // ==========================================
-
-    const responseTest = {
-      ...test,
-
-      problems: hydratedProblems,
-    };
-
-    console.log(
-      "FINAL TEST RESPONSE:",
-      JSON.stringify(responseTest.problems, null, 2),
-    );
-
     return res.status(200).json({
       success: true,
-      test: responseTest,
+
+      test: plainTest,
     });
   } catch (error) {
     console.error("GET TEST BY ID ERROR:", error);
@@ -472,9 +422,9 @@ export const getTestById = async (req, res) => {
   }
 };
 
-// ==============================
+// ============================================================
 // PUBLISH TEST
-// ==============================
+// ============================================================
 
 export const publishTest = async (req, res) => {
   try {
@@ -483,26 +433,38 @@ export const publishTest = async (req, res) => {
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot publish this test",
       });
     }
 
-    if (!test.problems.length) {
+    // --------------------------------------------------------
+    // MUST HAVE PROBLEM
+    // --------------------------------------------------------
+
+    if (!Array.isArray(test.problems) || test.problems.length === 0) {
       return res.status(400).json({
         success: false,
+
         message: "Add at least one problem before publishing",
       });
     }
+
+    // --------------------------------------------------------
+    // PUBLISH
+    // --------------------------------------------------------
 
     test.status = "published";
 
@@ -510,89 +472,93 @@ export const publishTest = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+
       message: "Test published successfully",
+
       test,
     });
   } catch (error) {
+    console.error("PUBLISH TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to publish test",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // START TEST
-// ==============================
+// ============================================================
 
 export const startTest = async (req, res) => {
   try {
     const { id: testId } = req.params;
 
-    console.log("========== START TEST ==========");
-    console.log("USER:", req.user._id);
-    console.log("TEST:", testId);
+    // --------------------------------------------------------
+    // VALIDATE TEST ID
+    // --------------------------------------------------------
 
-    const allSubmissions = await Submission.find({
+    if (!mongoose.Types.ObjectId.isValid(testId)) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Invalid test id",
+      });
+    }
+
+    // --------------------------------------------------------
+    // ALREADY FINALLY SUBMITTED
+    // --------------------------------------------------------
+
+    const alreadySubmitted = await Submission.exists({
       user: req.user._id,
-      test: testId,
-    });
-    console.log(allSubmissions);
 
-    console.log(
-      "ALL SUBMISSIONS:",
-      allSubmissions.map((item) => ({
-        id: item._id,
-        status: item.status,
-        test: item.test,
-        user: item.user,
-        submittedAt: item.submittedAt,
-      })),
-    );
-
-    const alreadySubmitted = await Submission.findOne({
-      user: req.user._id,
       test: testId,
+
       status: "submitted",
     });
-
-    console.log("ALREADY SUBMITTED:", alreadySubmitted);
 
     if (alreadySubmitted) {
       return res.status(409).json({
         success: false,
+
         message: "You have already submitted this test",
       });
     }
 
-    // =====================================================
+    // --------------------------------------------------------
     // GET TEST
-    // =====================================================
+    // --------------------------------------------------------
 
     const test = await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    // =====================================================
-    // TEST STATUS
-    // =====================================================
+    // --------------------------------------------------------
+    // AVAILABILITY
+    // --------------------------------------------------------
 
-    if (test.status !== "published") {
+    if (test.status !== "published" || test.isActive === false) {
       return res.status(400).json({
         success: false,
-        message: "Test is not published",
+
+        message: "Test is not available",
       });
     }
 
-    // =====================================================
-    // TEST TIME CHECK
-    // =====================================================
+    // --------------------------------------------------------
+    // TEST WINDOW
+    // --------------------------------------------------------
 
     const now = new Date();
 
@@ -603,6 +569,7 @@ export const startTest = async (req, res) => {
     if (now.getTime() < startTime.getTime()) {
       return res.status(400).json({
         success: false,
+
         message: "Test has not started yet",
       });
     }
@@ -610,30 +577,34 @@ export const startTest = async (req, res) => {
     if (now.getTime() > endTime.getTime()) {
       return res.status(400).json({
         success: false,
+
         message: "Test has already ended",
       });
     }
 
-    // =====================================================
-    // CHECK EXISTING ATTEMPT
-    // =====================================================
+    // --------------------------------------------------------
+    // EXISTING ATTEMPT
+    // --------------------------------------------------------
 
     const existingAttempt = await TestAttempt.findOne({
       test: test._id,
+
       student: req.user._id,
     });
 
     if (existingAttempt) {
       return res.status(409).json({
         success: false,
+
         message: "You have already started this test",
+
         attempt: existingAttempt,
       });
     }
 
-    // =====================================================
+    // --------------------------------------------------------
     // INITIAL PROBLEM RESULTS
-    // =====================================================
+    // --------------------------------------------------------
 
     const problemResults = test.problems.map((item) => ({
       problem: item.problem,
@@ -643,9 +614,9 @@ export const startTest = async (req, res) => {
       submission: null,
     }));
 
-    // =====================================================
-    // CREATE TEST ATTEMPT
-    // =====================================================
+    // --------------------------------------------------------
+    // CREATE ATTEMPT
+    // --------------------------------------------------------
 
     const attempt = await TestAttempt.create({
       test: test._id,
@@ -661,18 +632,15 @@ export const startTest = async (req, res) => {
       problemResults,
     });
 
-    // =====================================================
+    // --------------------------------------------------------
     // DEADLINE
-    // =====================================================
+    // --------------------------------------------------------
 
     const attemptDeadline = getAttemptDeadline(attempt, test);
 
-    // =====================================================
-    // RESPONSE
-    // =====================================================
-
     return res.status(201).json({
       success: true,
+
       message: "Test started successfully",
 
       attempt: {
@@ -688,71 +656,95 @@ export const startTest = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to start test",
+
       error: error.message,
     });
   }
 };
 
+// ============================================================
+// FINISH TEST
+// ============================================================
+
 export const finishTest = async (req, res) => {
   try {
     const { id: testId } = req.params;
 
-    // ALREADY SUBMITTED CHECK
+    // --------------------------------------------------------
+    // EXISTING SUBMISSION
+    // --------------------------------------------------------
+
     const existingSubmission = await Submission.findOne({
       test: testId,
+
       user: req.user._id,
     });
+
+    // --------------------------------------------------------
+    // ALREADY SUBMITTED
+    // --------------------------------------------------------
 
     if (existingSubmission?.status === "submitted") {
       return res.status(409).json({
         success: false,
+
         message: "You have already submitted this test",
       });
     }
 
+    // --------------------------------------------------------
+    // ACTIVE ATTEMPT
+    // --------------------------------------------------------
+
     const attempt = await TestAttempt.findOne({
       test: testId,
+
       student: req.user._id,
+
       status: "in_progress",
     });
 
     if (!attempt) {
       return res.status(404).json({
         success: false,
+
         message: "Active test attempt not found",
       });
     }
 
-    const submission =
-      existingSubmission ||
-      (await Submission.findOne({
-        test: testId,
-        user: req.user._id,
-      }));
+    // --------------------------------------------------------
+    // MUST HAVE AT LEAST ONE SUBMITTED PROBLEM
+    // --------------------------------------------------------
 
-    if (!submission) {
+    if (!existingSubmission) {
       return res.status(400).json({
         success: false,
+
         message: "No problem submission found",
       });
     }
 
+    const submission = existingSubmission;
+
+    // --------------------------------------------------------
     // FINALIZE SUBMISSION
+    // --------------------------------------------------------
+
     submission.status = "submitted";
 
     submission.submittedAt = new Date();
 
-    submission.totalMarks = submission.problems.reduce(
-      (total, item) => total + Number(item.marks || 0),
-      0,
-    );
-
     await submission.save();
 
-    // SAVE SOLVED PROBLEMS IN USER PROFILE
+    // --------------------------------------------------------
+    // SAVE ACCEPTED PROBLEMS IN USER PROFILE
+    // --------------------------------------------------------
+
     const solvedProblemIds = submission.problems
       .filter((item) => item.verdict === "Accepted")
+
       .map((item) => item.problem);
 
     if (solvedProblemIds.length > 0) {
@@ -765,23 +757,53 @@ export const finishTest = async (req, res) => {
       });
     }
 
+    // --------------------------------------------------------
+    // QUESTION COUNTS
+    // --------------------------------------------------------
+
+    const totalQuestions = attempt.problemResults.length;
+
+    const attemptedQuestions = submission.problems.length;
+
+    const solvedQuestions = solvedProblemIds.length;
+
+    const unsolvedQuestions = Math.max(totalQuestions - solvedQuestions, 0);
+
+    // --------------------------------------------------------
+    // RESPONSE RESULT
+    // --------------------------------------------------------
+
     const result = {
       submissionId: submission._id,
 
-      totalMarks: submission.totalMarks,
+      totalQuestions,
+
+      attemptedQuestions,
+
+      solvedQuestions,
+
+      unsolvedQuestions,
+
       solvedProblems: solvedProblemIds,
+
       aiPromptsUsed: attempt.aiPromptsUsed || 0,
+
       submittedAt: submission.submittedAt,
     };
 
+    // --------------------------------------------------------
     // DELETE TEMPORARY ATTEMPT
+    // --------------------------------------------------------
+
     await TestAttempt.deleteOne({
       _id: attempt._id,
     });
 
     return res.status(200).json({
       success: true,
+
       message: "Test submitted successfully",
+
       result,
     });
   } catch (error) {
@@ -789,83 +811,128 @@ export const finishTest = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message: "Failed to submit test",
+
       error: error.message,
     });
   }
 };
 
+// ============================================================
+// GET TEST RESULTS
+// TEACHER / ADMIN
+// ============================================================
+
 export const getTestResults = async (req, res) => {
   try {
     const { id: testId } = req.params;
+
+    // --------------------------------------------------------
+    // GET TEST
+    // --------------------------------------------------------
 
     const test = await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot view results for this test",
       });
     }
 
-    const attempts = await TestAttempt.find({
+    // --------------------------------------------------------
+    // FINAL SUBMISSIONS
+    // --------------------------------------------------------
+
+    const submissions = await Submission.find({
       test: testId,
+
+      status: "submitted",
     })
-      .populate("student", "name email branch year")
-      .populate("problemResults.problem", "title difficulty topic")
-      .populate(
-        "problemResults.submission",
-        "language verdict passedTestCases totalTestCases executionTime memoryUsed",
-      )
+      .populate("user", "name email branch year")
+
+      .populate("problems.problem", "title slug difficulty topic")
+
       .sort({
-        totalMarks: -1,
         submittedAt: 1,
       });
 
-    const results = attempts.map((attempt) => ({
-      attemptId: attempt._id,
+    // --------------------------------------------------------
+    // TOTAL QUESTIONS
+    // --------------------------------------------------------
 
-      student: attempt.student,
+    const totalProblems = test.problems.length;
 
-      status: attempt.status,
+    // --------------------------------------------------------
+    // FORMAT RESULTS
+    // --------------------------------------------------------
 
-      startedAt: attempt.startedAt,
+    const results = submissions.map((submission) => {
+      const attemptedProblems = submission.problems.length;
 
-      submittedAt: attempt.submittedAt,
+      const solvedProblems = submission.problems.filter(
+        (item) => item.verdict === "Accepted",
+      ).length;
 
-      aiPromptsUsed: attempt.aiPromptsUsed,
+      const failedProblems = submission.problems.filter(
+        (item) => item.verdict !== "Accepted",
+      ).length;
 
-      totalMarks: attempt.totalMarks,
+      const notAttemptedProblems = Math.max(
+        totalProblems - attemptedProblems,
+        0,
+      );
 
-      problems: attempt.problemResults.map((item) => ({
-        problem: item.problem,
+      return {
+        submissionId: submission._id,
 
-        status: item.status,
+        student: submission.user,
 
-        marksObtained: item.marksObtained,
+        status: submission.status,
 
-        submission: item.submission,
-      })),
-    }));
+        submittedAt: submission.submittedAt,
+
+        totalProblems,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        failedProblems,
+
+        notAttemptedProblems,
+
+        problems: submission.problems,
+      };
+    });
 
     return res.status(200).json({
       success: true,
 
       test: {
         id: test._id,
+
         title: test.title,
+
         duration: test.duration,
+
         maxAIPrompts: test.maxAIPrompts,
+
+        totalProblems,
       },
 
       totalStudents: results.length,
@@ -873,48 +940,55 @@ export const getTestResults = async (req, res) => {
       results,
     });
   } catch (error) {
+    console.error("GET TEST RESULTS ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch test results",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // UPDATE TEST
-// ==============================
+// ============================================================
 
 export const updateTest = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // --------------------------------------------------------
+    // GET TEST
+    // --------------------------------------------------------
 
     const test = await Test.findById(id);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot update this test",
       });
     }
 
-    // published/completed test ko freely modify mat karo
-    if (test.status === "completed") {
-      return res.status(400).json({
-        success: false,
-        message: "Completed test cannot be modified",
-      });
-    }
+    // --------------------------------------------------------
+    // ALLOWED FIELDS
+    // --------------------------------------------------------
 
     const allowedFields = [
       "title",
@@ -923,6 +997,7 @@ export const updateTest = async (req, res) => {
       "startTime",
       "endTime",
       "maxAIPrompts",
+      "allowDirectAccess",
     ];
 
     allowedFields.forEach((field) => {
@@ -931,163 +1006,268 @@ export const updateTest = async (req, res) => {
       }
     });
 
-    if (test.maxAIPrompts > 3) {
+    // --------------------------------------------------------
+    // DURATION VALIDATION
+    // --------------------------------------------------------
+
+    const numericDuration = Number(test.duration);
+
+    if (!Number.isFinite(numericDuration) || numericDuration <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Maximum AI prompts allowed is 3",
+
+        message: "Duration must be greater than 0",
       });
     }
 
-    if (new Date(test.endTime) <= new Date(test.startTime)) {
+    // --------------------------------------------------------
+    // AI LIMIT VALIDATION
+    // --------------------------------------------------------
+
+    const numericMaxAIPrompts = Number(test.maxAIPrompts);
+
+    if (
+      !Number.isInteger(numericMaxAIPrompts) ||
+      numericMaxAIPrompts < 0 ||
+      numericMaxAIPrompts > 3
+    ) {
       return res.status(400).json({
         success: false,
+
+        message: "Maximum AI prompts must be between 0 and 3",
+      });
+    }
+
+    // --------------------------------------------------------
+    // TIME VALIDATION
+    // --------------------------------------------------------
+
+    const startTime = new Date(test.startTime);
+
+    const endTime = new Date(test.endTime);
+
+    if (
+      Number.isNaN(startTime.getTime()) ||
+      Number.isNaN(endTime.getTime()) ||
+      endTime <= startTime
+    ) {
+      return res.status(400).json({
+        success: false,
+
         message: "End time must be after start time",
       });
     }
+
+    test.duration = numericDuration;
+
+    test.maxAIPrompts = numericMaxAIPrompts;
 
     await test.save();
 
     return res.status(200).json({
       success: true,
+
       message: "Test updated successfully",
+
       test,
     });
   } catch (error) {
+    console.error("UPDATE TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to update test",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // ADD PROBLEM TO TEST
-// ==============================
+// ============================================================
 
 export const addProblemToTest = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { problemId, marks = 10 } = req.body;
+    const { problemId } = req.body;
 
-    if (!problemId) {
+    // --------------------------------------------------------
+    // VALIDATE PROBLEM ID
+    // --------------------------------------------------------
+
+    if (!problemId || !mongoose.Types.ObjectId.isValid(problemId)) {
       return res.status(400).json({
         success: false,
-        message: "Problem ID is required",
+
+        message: "Valid problem ID is required",
       });
     }
+
+    // --------------------------------------------------------
+    // GET TEST
+    // --------------------------------------------------------
 
     const test = await Test.findById(id);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot modify this test",
       });
     }
 
+    // --------------------------------------------------------
+    // ONLY DRAFT
+    // --------------------------------------------------------
+
     if (test.status !== "draft") {
       return res.status(400).json({
         success: false,
+
         message: "Problems can only be changed while test is in draft mode",
       });
     }
 
-    const problem = await Problem.findById(problemId);
+    // --------------------------------------------------------
+    // GET PROBLEM
+    // --------------------------------------------------------
+
+    const problem = await Problem.findOne({
+      _id: problemId,
+
+      isActive: true,
+    });
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-        message: "Problem not found",
+
+        message: "Problem not found or inactive",
       });
     }
 
+    // --------------------------------------------------------
+    // DUPLICATE CHECK
+    // --------------------------------------------------------
+
     const alreadyAdded = test.problems.some(
-      (item) => item.problem.toString() === problemId,
+      (item) => String(item.problem) === String(problemId),
     );
 
     if (alreadyAdded) {
       return res.status(409).json({
         success: false,
+
         message: "Problem already added to test",
       });
     }
 
+    // --------------------------------------------------------
+    // ADD
+    // --------------------------------------------------------
+
     test.problems.push({
       problem: problemId,
-      marks,
     });
 
     await test.save();
 
     return res.status(200).json({
       success: true,
+
       message: "Problem added successfully",
+
       problems: test.problems,
     });
   } catch (error) {
+    console.error("ADD PROBLEM TO TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to add problem",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // REMOVE PROBLEM FROM TEST
-// ==============================
+// ============================================================
 
 export const removeProblemFromTest = async (req, res) => {
   try {
     const { id, problemId } = req.params;
+
+    // ------------------------------------------------------
+    // GET TEST
+    // ------------------------------------------------------
 
     const test = await Test.findById(id);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // ------------------------------------------------------
+    // PERMISSION
+    // ------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot modify this test",
       });
     }
 
+    // ------------------------------------------------------
+    // ONLY DRAFT
+    // ------------------------------------------------------
+
     if (test.status !== "draft") {
       return res.status(400).json({
         success: false,
+
         message: "Problems can only be removed while test is in draft mode",
       });
     }
 
+    // ------------------------------------------------------
+    // REMOVE
+    // ------------------------------------------------------
+
     const before = test.problems.length;
 
     test.problems = test.problems.filter(
-      (item) => item.problem.toString() !== problemId,
+      (item) => String(item.problem) !== String(problemId),
     );
 
     if (before === test.problems.length) {
       return res.status(404).json({
         success: false,
+
         message: "Problem not found in this test",
       });
     }
@@ -1096,21 +1276,27 @@ export const removeProblemFromTest = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+
       message: "Problem removed successfully",
+
       problems: test.problems,
     });
   } catch (error) {
+    console.error("REMOVE PROBLEM FROM TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to remove problem",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // UNPUBLISH TEST
-// ==============================
+// ============================================================
 
 export const unpublishTest = async (req, res) => {
   try {
@@ -1119,31 +1305,49 @@ export const unpublishTest = async (req, res) => {
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot unpublish this test",
       });
     }
 
-    const attempts = await TestAttempt.countDocuments({
-      test: test._id,
-    });
+    // --------------------------------------------------------
+    // CHECK BOTH TEMP + PERMANENT ACTIVITY
+    // --------------------------------------------------------
 
-    if (attempts > 0) {
+    const [attemptCount, submissionCount] = await Promise.all([
+      TestAttempt.countDocuments({
+        test: test._id,
+      }),
+
+      Submission.countDocuments({
+        test: test._id,
+      }),
+    ]);
+
+    if (attemptCount > 0 || submissionCount > 0) {
       return res.status(400).json({
         success: false,
+
         message:
-          "Cannot unpublish because students have already started this test",
+          "Cannot unpublish because students have already started or submitted this test",
       });
     }
+
+    // --------------------------------------------------------
+    // UNPUBLISH
+    // --------------------------------------------------------
 
     test.status = "draft";
 
@@ -1151,21 +1355,27 @@ export const unpublishTest = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+
       message: "Test moved back to draft",
+
       test,
     });
   } catch (error) {
+    console.error("UNPUBLISH TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to unpublish test",
+
       error: error.message,
     });
   }
 };
 
-// ==============================
+// ============================================================
 // DELETE TEST
-// ==============================
+// ============================================================
 
 export const deleteTest = async (req, res) => {
   try {
@@ -1174,74 +1384,134 @@ export const deleteTest = async (req, res) => {
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    const isOwner = test.createdBy.toString() === req.user._id.toString();
+    // --------------------------------------------------------
+    // PERMISSION
+    // --------------------------------------------------------
 
-    const isTeacher = req.user.role === "teacher";
-
-    const isAdmin = req.user.role === "admin";
-
-    if (!isOwner && !isTeacher && !isAdmin) {
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot delete this test",
       });
     }
 
-    const attemptCount = await TestAttempt.countDocuments({
-      test: test._id,
-    });
+    // --------------------------------------------------------
+    // CHECK STUDENT ACTIVITY
+    // --------------------------------------------------------
 
-    if (attemptCount > 0) {
+    const [attemptCount, submissionCount] = await Promise.all([
+      TestAttempt.countDocuments({
+        test: test._id,
+      }),
+
+      Submission.countDocuments({
+        test: test._id,
+      }),
+    ]);
+
+    if (attemptCount > 0 || submissionCount > 0) {
       return res.status(400).json({
         success: false,
-        message: "Cannot delete test because student attempts already exist",
+
+        message: "Cannot delete test because student activity already exists",
       });
     }
+
+    // --------------------------------------------------------
+    // DELETE
+    // --------------------------------------------------------
 
     await Test.findByIdAndDelete(test._id);
 
     return res.status(200).json({
       success: true,
+
       message: "Test deleted successfully",
     });
   } catch (error) {
+    console.error("DELETE TEST ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to delete test",
+
       error: error.message,
     });
   }
 };
 
+// ============================================================
+// JOIN TEST
+// ============================================================
+
 export const joinTest = async (req, res) => {
   try {
     const { accessCode } = req.body || {};
 
-    if (!accessCode) {
+    // --------------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------------
+
+    if (!accessCode?.trim()) {
       return res.status(400).json({
         success: false,
+
         message: "Access code is required",
       });
     }
 
     const normalizedCode = accessCode.trim().toUpperCase();
 
+    // --------------------------------------------------------
+    // FIND TEST
+    // --------------------------------------------------------
+
     const test = await Test.findOne({
       accessCode: normalizedCode,
+
       status: "published",
+
       isActive: true,
     }).populate("problems.problem", "title difficulty topic");
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Invalid or unavailable test code",
       });
     }
+
+    // --------------------------------------------------------
+    // ALREADY SUBMITTED
+    // --------------------------------------------------------
+
+    const alreadySubmitted = await Submission.exists({
+      user: req.user._id,
+
+      test: test._id,
+
+      status: "submitted",
+    });
+
+    if (alreadySubmitted) {
+      return res.status(409).json({
+        success: false,
+
+        message: "You have already submitted this test",
+      });
+    }
+
+    // --------------------------------------------------------
+    // TIME STATUS
+    // --------------------------------------------------------
 
     const now = new Date();
 
@@ -1249,23 +1519,30 @@ export const joinTest = async (req, res) => {
 
     const endTime = new Date(test.endTime);
 
-    // Test already finished
-    if (now > endTime) {
+    if (now.getTime() > endTime.getTime()) {
       return res.status(400).json({
         success: false,
+
         message: "This test has already ended",
       });
     }
 
-    // Check whether student already has an attempt
+    // --------------------------------------------------------
+    // EXISTING ATTEMPT
+    // --------------------------------------------------------
+
     const existingAttempt = await TestAttempt.findOne({
       test: test._id,
+
       student: req.user._id,
     });
 
     let testStatus = "upcoming";
 
-    if (now >= startTime && now <= endTime) {
+    if (
+      now.getTime() >= startTime.getTime() &&
+      now.getTime() <= endTime.getTime()
+    ) {
       testStatus = "live";
     }
 
@@ -1276,6 +1553,8 @@ export const joinTest = async (req, res) => {
 
       test: {
         id: test._id,
+
+        _id: test._id,
 
         title: test.title,
 
@@ -1315,66 +1594,182 @@ export const joinTest = async (req, res) => {
   }
 };
 
+// ============================================================
+// GET TEST PARTICIPANTS
+// TEACHER / ADMIN
+// ============================================================
+
 export const getTestParticipants = async (req, res) => {
   try {
     const { id: testId } = req.params;
+
+    // ------------------------------------------------------
+    // GET TEST
+    // ------------------------------------------------------
 
     const test = await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
         success: false,
+
         message: "Test not found",
       });
     }
 
-    if (
-      test.createdBy.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
+    // ------------------------------------------------------
+    // PERMISSION
+    // ------------------------------------------------------
+
+    if (!isTestOwnerOrAdmin(test, req.user)) {
       return res.status(403).json({
         success: false,
+
         message: "You cannot view participants for this test",
       });
     }
 
-    const attempts = await TestAttempt.find({
-      test: testId,
-    })
-      .populate("student", "name email branch year")
-      .sort({
-        startedAt: -1,
-      });
+    // ------------------------------------------------------
+    // TEMP ATTEMPTS + PERMANENT SUBMISSIONS
+    // ------------------------------------------------------
 
-    const participants = attempts.map((attempt) => ({
-      attemptId: attempt._id,
+    const [attempts, submissions] = await Promise.all([
+      TestAttempt.find({
+        test: testId,
+      })
+        .populate("student", "name email branch year")
 
-      student: attempt.student,
+        .sort({
+          startedAt: -1,
+        }),
 
-      status: attempt.status,
+      Submission.find({
+        test: testId,
 
-      startedAt: attempt.startedAt,
+        status: "submitted",
+      })
+        .populate("user", "name email branch year")
 
-      submittedAt: attempt.submittedAt,
+        .populate("problems.problem", "title difficulty topic")
 
-      aiPromptsUsed: attempt.aiPromptsUsed,
+        .sort({
+          submittedAt: -1,
+        }),
+    ]);
 
-      totalMarks: attempt.totalMarks,
+    const totalProblems = test.problems.length;
 
-      passedProblems: attempt.problemResults.filter(
+    const participantMap = new Map();
+
+    // ------------------------------------------------------
+    // ACTIVE / TEMP ATTEMPTS
+    // ------------------------------------------------------
+
+    attempts.forEach((attempt) => {
+      if (!attempt.student) {
+        return;
+      }
+
+      const studentId = attempt.student._id.toString();
+
+      const passedProblems = attempt.problemResults.filter(
         (item) => item.status === "passed",
-      ).length,
+      ).length;
 
-      failedProblems: attempt.problemResults.filter(
+      const failedProblems = attempt.problemResults.filter(
         (item) => item.status === "failed",
-      ).length,
+      ).length;
 
-      attemptedProblems: attempt.problemResults.filter(
+      const attemptedProblems = attempt.problemResults.filter(
         (item) => item.status !== "not_attempted",
-      ).length,
+      ).length;
 
-      totalProblems: attempt.problemResults.length,
-    }));
+      participantMap.set(studentId, {
+        student: attempt.student,
+
+        attemptId: attempt._id,
+
+        submissionId: null,
+
+        status: attempt.status,
+
+        startedAt: attempt.startedAt,
+
+        submittedAt: attempt.submittedAt,
+
+        aiPromptsUsed: attempt.aiPromptsUsed || 0,
+
+        passedProblems,
+
+        failedProblems,
+
+        attemptedProblems,
+
+        notAttemptedProblems: Math.max(totalProblems - attemptedProblems, 0),
+
+        totalProblems,
+      });
+    });
+
+    // ------------------------------------------------------
+    // FINAL SUBMISSIONS
+    // ------------------------------------------------------
+
+    submissions.forEach((submission) => {
+      if (!submission.user) {
+        return;
+      }
+
+      const studentId = submission.user._id.toString();
+
+      const attemptedProblems = submission.problems.length;
+
+      const passedProblems = submission.problems.filter(
+        (item) => item.verdict === "Accepted",
+      ).length;
+
+      const failedProblems = submission.problems.filter(
+        (item) => item.verdict !== "Accepted",
+      ).length;
+
+      const previous = participantMap.get(studentId);
+
+      participantMap.set(studentId, {
+        student: submission.user,
+
+        attemptId: previous?.attemptId || null,
+
+        submissionId: submission._id,
+
+        status: "submitted",
+
+        startedAt: previous?.startedAt || null,
+
+        submittedAt: submission.submittedAt,
+
+        aiPromptsUsed: previous?.aiPromptsUsed ?? null,
+
+        passedProblems,
+
+        failedProblems,
+
+        attemptedProblems,
+
+        notAttemptedProblems: Math.max(totalProblems - attemptedProblems, 0),
+
+        totalProblems,
+      });
+    });
+
+    // ------------------------------------------------------
+    // FINAL PARTICIPANTS
+    // ------------------------------------------------------
+
+    const participants = Array.from(participantMap.values());
+
+    // ------------------------------------------------------
+    // SUMMARY
+    // ------------------------------------------------------
 
     const summary = {
       totalParticipants: participants.length,
@@ -1393,8 +1788,12 @@ export const getTestParticipants = async (req, res) => {
 
       test: {
         id: test._id,
+
         title: test.title,
+
         status: test.status,
+
+        totalProblems,
       },
 
       summary,
@@ -1402,9 +1801,13 @@ export const getTestParticipants = async (req, res) => {
       participants,
     });
   } catch (error) {
+    console.error("GET TEST PARTICIPANTS ERROR:", error);
+
     return res.status(500).json({
       success: false,
+
       message: "Failed to fetch test participants",
+
       error: error.message,
     });
   }
