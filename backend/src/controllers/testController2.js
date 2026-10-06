@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import User from "../models/user.js";
+import User from "../models/User.js";
 import Submission from "../models/submission.js";
 import Problem from "../models/Problem.js";
 import Test from "../models/test.js";
@@ -317,358 +317,202 @@ export const repairTestProblems = async (req, res) => {
   }
 };
 
-export const getParticipantDetails =
-  async (req, res) => {
-    try {
-      const {
-        testId,
-        studentId,
-      } = req.params;
+export const getParticipantDetails = async (req, res) => {
+  try {
+    const { testId, studentId } = req.params;
 
-      if (
-        !mongoose.Types.ObjectId.isValid(
-          testId,
-        ) ||
-        !mongoose.Types.ObjectId.isValid(
-          studentId,
-        )
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              "Invalid test or student id",
-          });
-      }
-
-      const test =
-        await Test.findById(
-          testId,
-        )
-          .populate({
-            path:
-              "problems.problem",
-            select:
-              "title topic difficulty timeComplexity spaceComplexity",
-          })
-          .lean();
-
-      if (!test) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message:
-              "Test not found",
-          });
-      }
-
-      if (
-        String(
-          test.createdBy,
-        ) !==
-          String(
-            req.user._id,
-          ) &&
-        req.user.role !==
-          "admin"
-      ) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message:
-              "You are not allowed to view this participant",
-          });
-      }
-
-      const student =
-        await User.findById(
-          studentId,
-        )
-          .select(
-            "name email branch year rollNo",
-          )
-          .lean();
-
-      if (!student) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message:
-              "Student not found",
-          });
-      }
-
-      const [
-        submission,
-        attempt,
-      ] =
-        await Promise.all([
-          Submission.findOne({
-            test: testId,
-            user: studentId,
-          }).lean(),
-
-          TestAttempt.findOne({
-            test: testId,
-            student:
-              studentId,
-          }).lean(),
-        ]);
-
-      if (
-        !submission &&
-        !attempt
-      ) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message:
-              "No attempt or submission found for this student",
-          });
-      }
-
-      const submissionMap =
-        new Map();
-
-      if (
-        submission?.problems
-          ?.length
-      ) {
-        for (
-          const item of
-          submission.problems
-        ) {
-          submissionMap.set(
-            String(
-              item.problem,
-            ),
-            item,
-          );
-        }
-      }
-
-      const attemptMap =
-        new Map();
-
-      if (
-        attempt?.problemResults
-          ?.length
-      ) {
-        for (
-          const item of
-          attempt.problemResults
-        ) {
-          attemptMap.set(
-            String(
-              item.problem,
-            ),
-            item,
-          );
-        }
-      }
-
-      const problems =
-        (
-          test.problems ||
-          []
-        ).map(
-          (testProblem) => {
-            const problem =
-              testProblem.problem;
-
-            const problemId =
-              String(
-                problem?._id ||
-                  problem,
-              );
-
-            const submittedItem =
-              submissionMap.get(
-                problemId,
-              );
-
-            const attemptItem =
-              attemptMap.get(
-                problemId,
-              );
-
-            if (
-              submittedItem
-            ) {
-              const accepted =
-                submittedItem.verdict ===
-                "Accepted";
-
-              return {
-                problem,
-
-                status:
-                  accepted
-                    ? "passed"
-                    : "failed",
-
-                submission: {
-                  language:
-                    submittedItem.language ||
-                    "",
-
-                  verdict:
-                    submittedItem.verdict ||
-                    "",
-
-                  passedTestCases:
-                    submittedItem.passedTestCases ??
-                    0,
-
-                  totalTestCases:
-                    submittedItem.totalTestCases ??
-                    0,
-
-                  executionTime:
-                    submittedItem.executionTime ??
-                    null,
-
-                  memory:
-                    submittedItem.memory ??
-                    submittedItem.memoryUsed ??
-                    null,
-
-                  sourceCode:
-                    submittedItem.sourceCode ??
-                    submittedItem.code ??
-                    "",
-
-                  compileOutput:
-                    submittedItem.compileOutput ??
-                    "",
-
-                  stderr:
-                    submittedItem.stderr ??
-                    "",
-
-                  submittedAt:
-                    submittedItem.submittedAt ??
-                    null,
-                },
-              };
-            }
-
-            return {
-              problem,
-
-              status:
-                attemptItem?.status ||
-                "not_attempted",
-
-              submission:
-                null,
-            };
-          },
-        );
-
-      const totalProblems =
-        problems.length;
-
-      const attemptedProblems =
-        problems.filter(
-          (item) =>
-            item.status !==
-            "not_attempted",
-        ).length;
-
-      const solvedProblems =
-        problems.filter(
-          (item) =>
-            item.status ===
-            "passed",
-        ).length;
-
-      const failedProblems =
-        problems.filter(
-          (item) =>
-            item.status ===
-            "failed",
-        ).length;
-
-      return res
-        .status(200)
-        .json({
-          success: true,
-
-          test: {
-            _id:
-              test._id,
-
-            title:
-              test.title,
-
-            description:
-              test.description,
-
-            duration:
-              test.duration,
-
-            maxAIPrompts:
-              test.maxAIPrompts,
-
-            totalProblems,
-          },
-
-          attempt: {
-            student,
-
-            status:
-              submission?.status ||
-              attempt?.status ||
-              "in_progress",
-
-            startedAt:
-              attempt?.startedAt ||
-              submission?.createdAt ||
-              null,
-
-            submittedAt:
-              submission?.submittedAt ||
-              null,
-
-            aiPromptsUsed:
-              attempt?.aiPromptsUsed ||
-              0,
-
-            aiHistory:
-              attempt?.aiHistory ||
-              [],
-
-            totalProblems,
-
-            attemptedProblems,
-
-            solvedProblems,
-
-            failedProblems,
-
-            problems,
-          },
-        });
-    } catch (error) {
-      console.error(
-        "GET PARTICIPANT DETAILS ERROR:",
-        error,
-      );
-
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message:
-            "Failed to fetch student attempt",
-          error:
-            error.message,
-        });
+    if (
+      !mongoose.Types.ObjectId.isValid(testId) ||
+      !mongoose.Types.ObjectId.isValid(studentId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid test or student id",
+      });
     }
-  };
+
+    const test = await Test.findById(testId)
+      .populate({
+        path: "problems.problem",
+        select: "title topic difficulty timeComplexity spaceComplexity",
+      })
+      .lean();
+
+    if (!test) {
+      return res.status(404).json({
+        success: false,
+        message: "Test not found",
+      });
+    }
+
+    if (
+      String(test.createdBy) !== String(req.user._id) &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to view this participant",
+      });
+    }
+
+    const student = await User.findById(studentId)
+      .select("name email branch year rollNo")
+      .lean();
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    const [submission, attempt] = await Promise.all([
+      Submission.findOne({
+        test: testId,
+        user: studentId,
+      }).lean(),
+
+      TestAttempt.findOne({
+        test: testId,
+        student: studentId,
+      }).lean(),
+    ]);
+
+    if (!submission && !attempt) {
+      return res.status(404).json({
+        success: false,
+        message: "No attempt or submission found for this student",
+      });
+    }
+
+    const submissionMap = new Map();
+
+    if (submission?.problems?.length) {
+      for (const item of submission.problems) {
+        submissionMap.set(String(item.problem), item);
+      }
+    }
+
+    const attemptMap = new Map();
+
+    if (attempt?.problemResults?.length) {
+      for (const item of attempt.problemResults) {
+        attemptMap.set(String(item.problem), item);
+      }
+    }
+
+    const problems = (test.problems || []).map((testProblem) => {
+      const problem = testProblem.problem;
+
+      const problemId = String(problem?._id || problem);
+
+      const submittedItem = submissionMap.get(problemId);
+
+      const attemptItem = attemptMap.get(problemId);
+
+      if (submittedItem) {
+        const accepted = submittedItem.verdict === "Accepted";
+
+        return {
+          problem,
+
+          status: accepted ? "passed" : "failed",
+
+          submission: {
+            language: submittedItem.language || "",
+
+            verdict: submittedItem.verdict || "",
+
+            passedTestCases: submittedItem.passedTestCases ?? 0,
+
+            totalTestCases: submittedItem.totalTestCases ?? 0,
+
+            executionTime: submittedItem.executionTime ?? null,
+
+            memory: submittedItem.memory ?? submittedItem.memoryUsed ?? null,
+
+            sourceCode: submittedItem.sourceCode ?? submittedItem.code ?? "",
+
+            compileOutput: submittedItem.compileOutput ?? "",
+
+            stderr: submittedItem.stderr ?? "",
+
+            submittedAt: submittedItem.submittedAt ?? null,
+          },
+        };
+      }
+
+      return {
+        problem,
+
+        status: attemptItem?.status || "not_attempted",
+
+        submission: null,
+      };
+    });
+
+    const totalProblems = problems.length;
+
+    const attemptedProblems = problems.filter(
+      (item) => item.status !== "not_attempted",
+    ).length;
+
+    const solvedProblems = problems.filter(
+      (item) => item.status === "passed",
+    ).length;
+
+    const failedProblems = problems.filter(
+      (item) => item.status === "failed",
+    ).length;
+
+    return res.status(200).json({
+      success: true,
+
+      test: {
+        _id: test._id,
+
+        title: test.title,
+
+        description: test.description,
+
+        duration: test.duration,
+
+        maxAIPrompts: test.maxAIPrompts,
+
+        totalProblems,
+      },
+
+      attempt: {
+        student,
+
+        status: submission?.status || attempt?.status || "in_progress",
+
+        startedAt: attempt?.startedAt || submission?.createdAt || null,
+
+        submittedAt: submission?.submittedAt || null,
+
+        aiPromptsUsed: attempt?.aiPromptsUsed || 0,
+
+        aiHistory: attempt?.aiHistory || [],
+
+        totalProblems,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        failedProblems,
+
+        problems,
+      },
+    });
+  } catch (error) {
+    console.error("GET PARTICIPANT DETAILS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch student attempt",
+      error: error.message,
+    });
+  }
+};

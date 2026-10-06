@@ -1,12 +1,5 @@
 import axios from "axios";
 
-const CODE_RUNNER_URL =
-  process.env.CODE_RUNNER_URL ||
-  "http://localhost:10000";
-
-const CODE_RUNNER_API_KEY =
-  process.env.CODE_RUNNER_API_KEY;
-
 // ==============================
 // EXECUTE CODE
 // ==============================
@@ -17,6 +10,32 @@ export const executeCode = async ({
   testCases,
 }) => {
   try {
+    // ==============================
+    // ENV
+    // ==============================
+
+    const CODE_RUNNER_URL =
+      process.env.CODE_RUNNER_URL?.replace(
+        /\/+$/,
+        "",
+      );
+      console.log(CODE_RUNNER_URL)
+
+    const CODE_RUNNER_API_KEY =
+      process.env.CODE_RUNNER_API_KEY;
+
+    if (!CODE_RUNNER_URL) {
+      throw new Error(
+        "CODE_RUNNER_URL is not configured",
+      );
+    }
+
+    if (!CODE_RUNNER_API_KEY) {
+      throw new Error(
+        "CODE_RUNNER_API_KEY is not configured",
+      );
+    }
+
     // ==============================
     // VALIDATION
     // ==============================
@@ -47,53 +66,41 @@ export const executeCode = async ({
     // ==============================
 
     const formattedTestCases =
-      testCases.map(
-        (testCase) => ({
-          input:
-            String(
-              testCase.input ??
-                "",
-            ),
+      testCases.map((testCase) => ({
+        input: String(
+          testCase.input ?? "",
+        ),
 
-          expectedOutput:
-            String(
-              testCase.expectedOutput ??
-                "",
-            ),
+        expectedOutput: String(
+          testCase.expectedOutput ?? "",
+        ),
 
-          isHidden:
-            Boolean(
-              testCase.isHidden,
-            ),
-        }),
-      );
+        isHidden: Boolean(
+          testCase.isHidden,
+        ),
+      }));
+
+    const runnerEndpoint =
+      `${CODE_RUNNER_URL}/api/execute`;
+
+    // ==============================
+    // DEBUG
+    // ==============================
 
     console.log(
       "========== CODE RUNNER REQUEST ==========",
     );
-    console.log(
-  "CODE_RUNNER_API_KEY loaded:",
-  Boolean(process.env.CODE_RUNNER_API_KEY),
-);
-
-console.log(
-  "KEY LENGTH:",
-  process.env.CODE_RUNNER_API_KEY?.length,
-);
 
     console.log({
-      url:
-        `${CODE_RUNNER_URL}/api/execute`,
-
+      url: runnerEndpoint,
       language,
-
       totalTestCases:
         formattedTestCases.length,
-
-      apiKeyLoaded:
-        Boolean(
-          CODE_RUNNER_API_KEY,
-        ),
+      apiKeyLoaded: Boolean(
+        CODE_RUNNER_API_KEY,
+      ),
+      apiKeyLength:
+        CODE_RUNNER_API_KEY.length,
     });
 
     // ==============================
@@ -102,22 +109,11 @@ console.log(
 
     const response =
       await axios.post(
-        `${CODE_RUNNER_URL}/api/execute`,
+        runnerEndpoint,
 
         {
-          /*
-            IMPORTANT:
-
-            Custom runner expects:
-            sourceCode
-            language
-            testCases
-          */
-
           sourceCode: code,
-
           language,
-
           testCases:
             formattedTestCases,
         },
@@ -131,21 +127,21 @@ console.log(
               CODE_RUNNER_API_KEY,
           },
 
-          timeout: 60000,
+          // Render free instance cold start
+          // ke liye thoda zyada timeout
+          timeout: 90000,
         },
       );
 
     // ==============================
-    // RETURN RUNNER RESULT
+    // RESPONSE
     // ==============================
 
     console.log(
       "========== CODE RUNNER RESPONSE ==========",
     );
 
-    console.log(
-      response.data,
-    );
+    console.log(response.data);
 
     return response.data;
   } catch (error) {
@@ -153,7 +149,10 @@ console.log(
       "========== CODE RUNNER SERVICE ERROR ==========",
     );
 
-    // Runner responded with error
+    // ==============================
+    // RUNNER RESPONDED WITH ERROR
+    // ==============================
+
     if (error.response) {
       console.error(
         "STATUS:",
@@ -166,24 +165,34 @@ console.log(
       );
 
       throw new Error(
-        error.response.data
-          ?.message ||
-          error.response.data
-            ?.error ||
+        error.response.data?.message ||
+          error.response.data?.error ||
           `Code runner failed with status ${error.response.status}`,
       );
     }
 
-    // Runner did not respond
+    // ==============================
+    // REQUEST SENT BUT NO RESPONSE
+    // ==============================
+
     if (error.request) {
       console.error(
         "Code runner did not respond",
+      );
+
+      console.error(
+        "REQUEST ERROR:",
+        error.message,
       );
 
       throw new Error(
         "Code runner service did not respond",
       );
     }
+
+    // ==============================
+    // OTHER ERROR
+    // ==============================
 
     console.error(
       "ERROR:",

@@ -3,53 +3,23 @@ import TestAttempt from "../models/testAttempt.js";
 import Problem from "../models/Problem.js";
 import AIPrompt from "../models/aiPrompt.js";
 
-import {
-  generateAIHint,
-} from "../services/aiService.js";
+import { generateAIHint } from "../services/aiService.js";
 
-import {
-  getAttemptDeadline,
-} from "../utils/getAttemptDeadline.js";
-
-// ==========================================
-// ASK AI
-// ==========================================
+import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
 
 export const askAI = async (req, res) => {
   try {
-    // ========================================
-    // REQUEST DATA
-    // ========================================
 
-    const {
-      testId,
-      problemId,
-      prompt,
-      code = "",
-    } = req.body;
+    const { testId, problemId, prompt, code = "" } = req.body;
 
-    // ========================================
-    // VALIDATION
-    // ========================================
-
-    if (
-      !testId ||
-      !problemId ||
-      !prompt?.trim()
-    ) {
+    if (!testId || !problemId || !prompt?.trim()) {
       return res.status(400).json({
         success: false,
-        message:
-          "Test ID, problem ID and prompt are required",
+        message: "Test ID, problem ID and prompt are required",
       });
     }
 
-    // ========================================
-    // FIND TEST
-    // ========================================
-
-    const test =
-      await Test.findById(testId);
+    const test = await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
@@ -62,18 +32,16 @@ export const askAI = async (req, res) => {
     // CHECK ACTIVE ATTEMPT
     // ========================================
 
-    const attempt =
-      await TestAttempt.findOne({
-        test: testId,
-        student: req.user._id,
-        status: "in_progress",
-      });
+    const attempt = await TestAttempt.findOne({
+      test: testId,
+      student: req.user._id,
+      status: "in_progress",
+    });
 
     if (!attempt) {
       return res.status(404).json({
         success: false,
-        message:
-          "Active test attempt not found",
+        message: "Active test attempt not found",
       });
     }
 
@@ -81,11 +49,7 @@ export const askAI = async (req, res) => {
     // TIMER CHECK
     // ========================================
 
-    const deadline =
-      getAttemptDeadline(
-        attempt,
-        test,
-      );
+    const deadline = getAttemptDeadline(attempt, test);
 
     const now = new Date();
 
@@ -97,8 +61,7 @@ export const askAI = async (req, res) => {
 
       return res.status(403).json({
         success: false,
-        message:
-          "Test time has expired",
+        message: "Test time has expired",
       });
     }
 
@@ -109,8 +72,7 @@ export const askAI = async (req, res) => {
     if (test.aiEnabled === false) {
       return res.status(403).json({
         success: false,
-        message:
-          "AI assistance is disabled for this test",
+        message: "AI assistance is disabled for this test",
       });
     }
 
@@ -118,20 +80,14 @@ export const askAI = async (req, res) => {
     // AI PROMPT LIMIT
     // ========================================
 
-    const maxAIPrompts =
-      Number(test.maxAIPrompts ?? 0);
+    const maxAIPrompts = Number(test.maxAIPrompts ?? 0);
 
-    const promptsUsed =
-      Number(attempt.aiPromptsUsed ?? 0);
+    const promptsUsed = Number(attempt.aiPromptsUsed ?? 0);
 
-    if (
-      maxAIPrompts <= 0 ||
-      promptsUsed >= maxAIPrompts
-    ) {
+    if (maxAIPrompts <= 0 || promptsUsed >= maxAIPrompts) {
       return res.status(403).json({
         success: false,
-        message:
-          "AI prompt limit reached",
+        message: "AI prompt limit reached",
         promptsUsed,
         promptsRemaining: 0,
       });
@@ -141,56 +97,23 @@ export const askAI = async (req, res) => {
     // FIND PROBLEM
     // ========================================
 
-    const problem =
-      await Problem.findById(
-        problemId,
-      );
+    const problem = await Problem.findById(problemId);
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-        message:
-          "Problem not found",
+        message: "Problem not found",
       });
     }
 
-    // ========================================
-    // CHECK PROBLEM BELONGS TO TEST
-    // ========================================
-    //
-    // Supports both:
-    //
-    // problems: [ObjectId]
-    //
-    // AND
-    //
-    // problems: [
-    //   {
-    //      problem: ObjectId,
-    //      marks: 10
-    //   }
-    // ]
-    //
-    // This also fixes:
-    // Cannot read properties of undefined
-    // (reading 'toString')
-    // ========================================
-
-    const belongsToTest =
-      test.problems?.some(
-        (item) =>
-          String(
-            item?.problem ??
-            item
-          ) ===
-          String(problemId),
-      );
+    const belongsToTest = test.problems?.some(
+      (item) => String(item?.problem ?? item) === String(problemId),
+    );
 
     if (!belongsToTest) {
       return res.status(403).json({
         success: false,
-        message:
-          "Problem does not belong to this test",
+        message: "Problem does not belong to this test",
       });
     }
 
@@ -198,55 +121,39 @@ export const askAI = async (req, res) => {
     // GENERATE REAL AI RESPONSE
     // ========================================
 
-    const answer =
-      await generateAIHint({
-        problem,
-        prompt: prompt.trim(),
-        code: code || "",
-      });
+    const answer = await generateAIHint({
+      problem,
+      prompt: prompt.trim(),
+      code: code || "",
+    });
 
     // ========================================
     // PROMPT NUMBER
     // ========================================
 
-    const promptNumber =
-      promptsUsed + 1;
+    const promptNumber = promptsUsed + 1;
 
     // ========================================
     // SAVE AI HISTORY
     // ========================================
 
-    const aiPrompt =
-      await AIPrompt.create({
-        test: test._id,
+    const aiPrompt = await AIPrompt.create({
+      test: test._id,
 
-        attempt:
-          attempt._id,
-
-        student:
-          req.user._id,
-
-        problem:
-          problem._id,
-
-        prompt:
-          prompt.trim(),
-
-        code:
-          code || "",
-
-        response:
-          answer,
-
-        promptNumber,
-      });
+      attempt: attempt._id,
+      student: req.user._id,
+      problem: problem._id,
+      prompt: prompt.trim(),
+      code: code || "",
+      response: answer,
+      promptNumber,
+    });
 
     // ========================================
     // UPDATE AI USAGE
     // ========================================
 
-    attempt.aiPromptsUsed =
-      promptNumber;
+    attempt.aiPromptsUsed = promptNumber;
 
     await attempt.save();
 
@@ -254,12 +161,7 @@ export const askAI = async (req, res) => {
     // CALCULATE REMAINING PROMPTS
     // ========================================
 
-    const promptsRemaining =
-      Math.max(
-        0,
-        maxAIPrompts -
-          promptNumber,
-      );
+    const promptsRemaining = Math.max(0, maxAIPrompts - promptNumber);
 
     // ========================================
     // RESPONSE
@@ -268,51 +170,28 @@ export const askAI = async (req, res) => {
     return res.status(200).json({
       success: true,
 
-      message:
-        "AI hint generated successfully",
-
+      message: "AI hint generated successfully",
       answer,
-
       promptNumber,
-
-      promptsUsed:
-        promptNumber,
-
+      promptsUsed: promptNumber,
       promptsRemaining,
-
-      aiPromptId:
-        aiPrompt._id,
-
+      aiPromptId: aiPrompt._id,
       deadline,
     });
+  } catch (error) {
+    console.error("========== HF ERROR ==========");
 
-} catch (error) {
-  console.error("========== HF ERROR ==========");
+    console.error("Status:", error?.httpResponse?.status);
 
-  console.error(
-    "Status:",
-    error?.httpResponse?.status
-  );
+    console.error("Body:", JSON.stringify(error?.httpResponse?.body, null, 2));
 
-  console.error(
-    "Body:",
-    JSON.stringify(
-      error?.httpResponse?.body,
-      null,
-      2
-    )
-  );
+    console.error("Request ID:", error?.httpResponse?.requestId);
 
-  console.error(
-    "Request ID:",
-    error?.httpResponse?.requestId
-  );
+    console.error("==============================");
 
-  console.error("==============================");
-
-  throw error;
-}
-}
+    throw error;
+  }
+};
 
 // ==========================================
 // GET MY AI HISTORY
@@ -320,14 +199,7 @@ export const askAI = async (req, res) => {
 
 export const getMyAIHistory = async (req, res) => {
   try {
-    const {
-      testId,
-      problemId,
-    } = req.query;
-
-    // ========================================
-    // BUILD FILTER
-    // ========================================
+    const { testId, problemId } = req.query;
 
     const filter = {
       student: req.user._id,
@@ -345,48 +217,28 @@ export const getMyAIHistory = async (req, res) => {
     // FETCH AI HISTORY
     // ========================================
 
-    const history =
-      await AIPrompt.find(filter)
-        .populate(
-          "problem",
-          "title slug difficulty topic"
-        )
-        .populate(
-          "test",
-          "title"
-        )
-        .sort({
-          createdAt: 1,
-        });
-
-    // ========================================
-    // RESPONSE
-    // ========================================
-
+    const history = await AIPrompt.find(filter)
+      .populate("problem", "title slug difficulty topic")
+      .populate("test", "title")
+      .sort({
+        createdAt: 1,
+      });
     return res.status(200).json({
       success: true,
 
-      count:
-        history.length,
+      count: history.length,
 
       history,
     });
-
   } catch (error) {
-
-    console.error(
-      "GET AI HISTORY ERROR:",
-      error
-    );
+    console.error("GET AI HISTORY ERROR:", error);
 
     return res.status(500).json({
       success: false,
 
-      message:
-        "Failed to fetch AI history",
+      message: "Failed to fetch AI history",
 
-      error:
-        error.message,
+      error: error.message,
     });
   }
 };

@@ -1,8 +1,8 @@
-import User from "../models/user.js";
+import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 
 const sendTokenResponse = (user, statusCode, res) => {
-  const token = generateToken(user._id,user.role,);
+  const token = generateToken(user._id, user.role);
 
   res.cookie("token", token, {
     httpOnly: true,
@@ -31,30 +31,20 @@ const sendTokenResponse = (user, statusCode, res) => {
 // REGISTER
 export const register = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      password,
-      branch,
-      year,
-      rollNo,
-    } = req.body;
+    const { name, email, password, branch, year, rollNo } = req.body;
 
     if (!name || !email || !password || !rollNo) {
       return res.status(400).json({
         success: false,
-        message:
-          "Name, email, password and roll number are required",
+        message: "Name, email, password and roll number are required",
       });
     }
 
-    const normalizedEmail =
-      email.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const existingUser =
-      await User.findOne({
-        email: normalizedEmail,
-      });
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -63,16 +53,14 @@ export const register = async (req, res) => {
       });
     }
 
-    const existingRollNo =
-      await User.findOne({
-        rollNo: rollNo.trim(),
-      });
+    const existingRollNo = await User.findOne({
+      rollNo: rollNo.trim(),
+    });
 
     if (existingRollNo) {
       return res.status(409).json({
         success: false,
-        message:
-          "Roll number already registered",
+        message: "Roll number already registered",
       });
     }
 
@@ -87,9 +75,7 @@ export const register = async (req, res) => {
 
       branch: branch?.trim() || "",
 
-      year: year
-        ? Number(year)
-        : undefined,
+      year: year ? Number(year) : undefined,
 
       isVerified: false,
     });
@@ -111,15 +97,11 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "Register error:",
-      error,
-    );
+    console.error("Register error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Server error while registering user",
+      message: "Server error while registering user",
       error: error.message,
     });
   }
@@ -156,22 +138,14 @@ export const login = async (req, res) => {
         message: "Invalid credentials",
       });
     }
-    if (
-      user.role === "student" &&
-      !user.isVerified
-    ) {
+    if (user.role === "student" && !user.isVerified) {
       return res.status(403).json({
         success: false,
-        message:
-          "Your account has not been verified yet",
+        message: "Your account has not been verified yet",
       });
     }
 
-    sendTokenResponse(
-      user,
-      200,
-      res,
-    );
+    sendTokenResponse(user, 200, res);
   } catch (error) {
     console.error(error);
 

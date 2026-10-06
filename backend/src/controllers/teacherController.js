@@ -2,12 +2,7 @@ import Problem from "../models/Problem.js";
 import Test from "../models/test.js";
 import TestAttempt from "../models/testAttempt.js";
 import Submission from "../models/submission.js";
-import User from "../models/user.js";
-
-// ============================================================
-// TEACHER DASHBOARD
-// GET /api/teacher/dashboard
-// ============================================================
+import User from "../models/User.js";
 
 export const getTeacherDashboard = async (req, res) => {
   try {
@@ -156,25 +151,15 @@ export const getTeacherDashboard = async (req, res) => {
 
       return {
         _id: test._id,
-
         title: test.title,
-
         duration: test.duration,
-
         problems: test.problems.length,
-
         participants: participantIds.size,
-
         submitted,
-
         status: test.status,
-
         runtimeStatus,
-
         startTime: test.startTime,
-
         endTime: test.endTime,
-
         accessCode: test.accessCode,
       };
     });
@@ -203,17 +188,11 @@ export const getTeacherDashboard = async (req, res) => {
     const upcomingAssessment = upcomingTest
       ? {
           _id: upcomingTest._id,
-
           title: upcomingTest.title,
-
           problems: upcomingTest.problems.length,
-
           duration: upcomingTest.duration,
-
           startTime: upcomingTest.startTime,
-
           endTime: upcomingTest.endTime,
-
           accessCode: upcomingTest.accessCode,
         }
       : null;
@@ -259,9 +238,7 @@ export const getTeacherDashboard = async (req, res) => {
     // --------------------------------------------------------
 
     let totalQuestionsAvailable = 0;
-
     let totalQuestionsAttempted = 0;
-
     let totalQuestionsSolved = 0;
 
     finalSubmissions.forEach((submission) => {
@@ -290,21 +267,12 @@ export const getTeacherDashboard = async (req, res) => {
 
     const performance = {
       solveRate,
-
       solvedQuestions: totalQuestionsSolved,
-
       attemptedQuestions: totalQuestionsAttempted,
-
       totalQuestions: totalQuestionsAvailable,
-
       averageSolvedPerTest,
-
       submittedTests: finalSubmissions.length,
     };
-
-    // ========================================================
-    // RESPONSE
-    // ========================================================
 
     return res.status(200).json({
       success: true,
@@ -317,9 +285,7 @@ export const getTeacherDashboard = async (req, res) => {
       },
 
       recentTests,
-
       upcomingAssessment,
-
       performance,
     });
   } catch (error) {
@@ -327,9 +293,7 @@ export const getTeacherDashboard = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
       message: "Failed to fetch teacher dashboard",
-
       error: error.message,
     });
   }

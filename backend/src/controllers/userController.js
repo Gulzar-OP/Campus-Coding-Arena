@@ -1,4 +1,4 @@
-import User from "../models/user.js";
+import User from "../models/User.js";
 import Submission from "../models/submission.js";
 
 export const getMyStats = async (
@@ -232,7 +232,13 @@ export const getStudentById = async (
       await User.findOne({
         _id: id,
         role: "student",
-      }).select("-password");
+      })
+        .select("-password")
+        .populate({
+          path: "solvedProblems",
+          select:
+            "title difficulty topic",
+        });
 
     if (!student) {
       return res.status(404).json({

@@ -1,428 +1,221 @@
 import Problem from "../models/Problem.js";
 import createSlug from "../utils/createSlug.js";
 import Test from "../models/test.js";
-export const createProblem =
-  async (req, res) => {
-    try {
-      const {
-        testId,
+export const createProblem = async (req, res) => {
+  try {
+    const {
+      testId,
 
-        title,
-        topic,
-        difficulty,
-        description,
+      title,
+      topic,
+      difficulty,
+      description,
 
-        timeComplexity = "",
-        spaceComplexity = "",
+      timeComplexity = "",
+      spaceComplexity = "",
 
-        tags = [],
+      tags = [],
 
-        languages = [
-          "C++",
-          "Java",
-          "Python",
-        ],
+      languages = ["C++", "Java", "Python"],
 
-        inputFormat = "",
-        outputFormat = "",
+      inputFormat = "",
+      outputFormat = "",
 
-        constraints = [],
-        companies = [],
+      constraints = [],
+      companies = [],
 
-        testCases = [],
+      testCases = [],
 
-        timeLimit = 2,
-        memoryLimit = 256,
-      } = req.body;
+      timeLimit = 2,
+      memoryLimit = 256,
+    } = req.body;
 
-      // =====================================
-      // REQUIRED
-      // =====================================
+    if (!title?.trim() || !topic?.trim() || !description?.trim()) {
+      return res.status(400).json({
+        success: false,
 
-      if (
-        !title?.trim() ||
-        !topic?.trim() ||
-        !description?.trim()
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            message:
-              "Title, topic and description are required",
-          });
-      }
-
-      // =====================================
-      // VALIDATE ARRAYS
-      // =====================================
-
-      if (
-        !Array.isArray(
-          tags,
-        ) ||
-        !Array.isArray(
-          languages,
-        ) ||
-        !Array.isArray(
-          constraints,
-        ) ||
-        !Array.isArray(
-          companies,
-        ) ||
-        !Array.isArray(
-          testCases,
-        )
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            message:
-              "Invalid problem data",
-          });
-      }
-
-      // =====================================
-      // TEST CASE VALIDATION
-      // =====================================
-
-      if (
-        testCases.length ===
-        0
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            message:
-              "At least one test case is required",
-          });
-      }
-
-      for (
-        let i = 0;
-        i <
-        testCases.length;
-        i++
-      ) {
-        const testCase =
-          testCases[i];
-
-        if (
-          typeof testCase.input !==
-            "string" ||
-          !testCase.input.trim()
-        ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              message: `Test case ${
-                i + 1
-              }: input is required`,
-            });
-        }
-
-        if (
-          typeof testCase.expectedOutput !==
-            "string" ||
-          !testCase.expectedOutput.trim()
-        ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              message: `Test case ${
-                i + 1
-              }: expected output is required`,
-            });
-        }
-      }
-
-      // =====================================
-      // LIMITS
-      // =====================================
-
-      const parsedTimeLimit =
-        Number(
-          timeLimit,
-        );
-
-      const parsedMemoryLimit =
-        Number(
-          memoryLimit,
-        );
-
-      if (
-        Number.isNaN(
-          parsedTimeLimit,
-        ) ||
-        parsedTimeLimit <= 0
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            message:
-              "Time limit must be greater than 0",
-          });
-      }
-
-      if (
-        Number.isNaN(
-          parsedMemoryLimit,
-        ) ||
-        parsedMemoryLimit <=
-          0
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            message:
-              "Memory limit must be greater than 0",
-          });
-      }
-
-      // =====================================
-      // SLUG
-      // =====================================
-
-      const slug =
-        createSlug(
-          title.trim(),
-        );
-
-      const existingProblem =
-        await Problem.findOne({
-          slug,
-        });
-
-      if (
-        existingProblem
-      ) {
-        return res
-          .status(409)
-          .json({
-            success:
-              false,
-
-            message:
-              "Problem with this title already exists",
-          });
-      }
-
-      // =====================================
-      // OPTIONAL TEST
-      // =====================================
-
-      let test =
-        null;
-
-      if (testId) {
-        test =
-          await Test.findById(
-            testId,
-          );
-
-        if (!test) {
-          return res
-            .status(404)
-            .json({
-              success:
-                false,
-
-              message:
-                "Test not found",
-            });
-        }
-
-        if (
-          String(
-            test.createdBy,
-          ) !==
-            String(
-              req.user
-                ._id,
-            ) &&
-          req.user
-            .role !==
-            "admin"
-        ) {
-          return res
-            .status(403)
-            .json({
-              success:
-                false,
-
-              message:
-                "You cannot add problems to this test",
-            });
-        }
-
-        if (
-          test.status !==
-          "draft"
-        ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              message:
-                "Problems can only be added to draft tests",
-            });
-        }
-      }
-
-      // =====================================
-      // CREATE
-      // =====================================
-
-      const problem =
-        await Problem.create({
-          title:
-            title.trim(),
-
-          slug,
-
-          topic:
-            topic.trim(),
-
-          difficulty:
-            difficulty ||
-            "Easy",
-
-          description:
-            description.trim(),
-
-          timeComplexity:
-            String(
-              timeComplexity,
-            ).trim(),
-
-          spaceComplexity:
-            String(
-              spaceComplexity,
-            ).trim(),
-
-          tags,
-
-          languages,
-
-          inputFormat:
-            String(
-              inputFormat,
-            ).trim(),
-
-          outputFormat:
-            String(
-              outputFormat,
-            ).trim(),
-
-          constraints,
-
-          companies,
-
-          testCases:
-            testCases.map(
-              (
-                testCase,
-              ) => ({
-                input:
-                  testCase.input,
-
-                expectedOutput:
-                  testCase.expectedOutput,
-
-                isHidden:
-                  Boolean(
-                    testCase.isHidden,
-                  ),
-              }),
-            ),
-
-          timeLimit:
-            parsedTimeLimit,
-
-          memoryLimit:
-            parsedMemoryLimit,
-
-          createdBy:
-            req.user._id,
-        });
-
-      // =====================================
-      // ADD TO TEST
-      // =====================================
-
-      if (test) {
-        test.problems.push({
-          problem:
-            problem._id,
-        });
-
-        await test.save();
-      }
-
-      return res
-        .status(201)
-        .json({
-          success:
-            true,
-
-          message:
-            test
-              ? "Problem created and added to test successfully"
-              : "Problem created successfully",
-
-          problem,
-
-          addedToTest:
-            Boolean(
-              test,
-            ),
-
-          testId:
-            test?._id ||
-            null,
-        });
-    } catch (error) {
-      console.error(
-        "CREATE PROBLEM ERROR:",
-        error,
-      );
-
-      return res
-        .status(500)
-        .json({
-          success:
-            false,
-
-          message:
-            "Failed to create problem",
-
-          error:
-            error.message,
-        });
+        message: "Title, topic and description are required",
+      });
     }
-  };
+
+    if (
+      !Array.isArray(tags) ||
+      !Array.isArray(languages) ||
+      !Array.isArray(constraints) ||
+      !Array.isArray(companies) ||
+      !Array.isArray(testCases)
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Invalid problem data",
+      });
+    }
+
+    if (testCases.length === 0) {
+      return res.status(400).json({
+        success: false,
+
+        message: "At least one test case is required",
+      });
+    }
+
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase = testCases[i];
+
+      if (typeof testCase.input !== "string" || !testCase.input.trim()) {
+        return res.status(400).json({
+          success: false,
+
+          message: `Test case ${i + 1}: input is required`,
+        });
+      }
+
+      if (
+        typeof testCase.expectedOutput !== "string" ||
+        !testCase.expectedOutput.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+
+          message: `Test case ${i + 1}: expected output is required`,
+        });
+      }
+    }
+
+    // LIMITS
+    const parsedTimeLimit = Number(timeLimit);
+
+    const parsedMemoryLimit = Number(memoryLimit);
+
+    if (Number.isNaN(parsedTimeLimit) || parsedTimeLimit <= 0) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Time limit must be greater than 0",
+      });
+    }
+
+    if (Number.isNaN(parsedMemoryLimit) || parsedMemoryLimit <= 0) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Memory limit must be greater than 0",
+      });
+    }
+
+    // SLUG
+    const slug = createSlug(title.trim());
+
+    const existingProblem = await Problem.findOne({
+      slug,
+    });
+
+    if (existingProblem) {
+      return res.status(409).json({
+        success: false,
+
+        message: "Problem with this title already exists",
+      });
+    }
+
+    // OPTIONAL TEST
+    let test = null;
+
+    if (testId) {
+      test = await Test.findById(testId);
+
+      if (!test) {
+        return res.status(404).json({
+          success: false,
+
+          message: "Test not found",
+        });
+      }
+
+      if (
+        String(test.createdBy) !== String(req.user._id) &&
+        req.user.role !== "admin"
+      ) {
+        return res.status(403).json({
+          success: false,
+
+          message: "You cannot add problems to this test",
+        });
+      }
+
+      if (test.status !== "draft") {
+        return res.status(400).json({
+          success: false,
+
+          message: "Problems can only be added to draft tests",
+        });
+      }
+    }
+
+    // =====================================
+    // CREATE
+    // =====================================
+
+    const problem = await Problem.create({
+      title: title.trim(),
+      slug,
+      topic: topic.trim(),
+      difficulty: difficulty || "Easy",
+      description: description.trim(),
+      timeComplexity: String(timeComplexity).trim(),
+      spaceComplexity: String(spaceComplexity).trim(),
+      tags,
+      languages,
+      inputFormat: String(inputFormat).trim(),
+      outputFormat: String(outputFormat).trim(),
+      constraints,
+      companies,
+      testCases: testCases.map((testCase) => ({
+        input: testCase.input,
+
+        expectedOutput: testCase.expectedOutput,
+
+        isHidden: Boolean(testCase.isHidden),
+      })),
+
+      timeLimit: parsedTimeLimit,
+      memoryLimit: parsedMemoryLimit,
+      createdBy: req.user._id,
+    });
+
+    // ADD TO TEST
+    if (test) {
+      test.problems.push({
+        problem: problem._id,
+      });
+
+      await test.save();
+    }
+
+    return res.status(201).json({
+      success: true,
+
+      message: test
+        ? "Problem created and added to test successfully"
+        : "Problem created successfully",
+
+      problem,
+
+      addedToTest: Boolean(test),
+
+      testId: test?._id || null,
+    });
+  } catch (error) {
+    console.error("CREATE PROBLEM ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create problem",
+      error: error.message,
+    });
+  }
+};
 
 // GET ALL PROBLEMS
 export const getAllProblems = async (req, res) => {
@@ -505,15 +298,10 @@ export const getAllProblems = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
       total,
-
       page: currentPage,
-
       limit: pageLimit,
-
       totalPages: Math.ceil(total / pageLimit),
-
       problems,
     });
   } catch (error) {
@@ -570,9 +358,9 @@ export const getProblemBySlug = async (req, res) => {
 export const getProblemById = async (req, res) => {
   try {
     const problem = await Problem.findById(req.params.id).populate(
-        "createdBy",
-        "name email",
-      );
+      "createdBy",
+      "name email",
+    );
 
     if (!problem) {
       return res.status(404).json({
@@ -611,8 +399,8 @@ export const updateProblem = async (req, res) => {
       topic,
       difficulty,
       description,
-    timeComplexity,
-    spaceComplexity,
+      timeComplexity,
+      spaceComplexity,
       tags,
       languages,
       inputFormat,
@@ -625,10 +413,6 @@ export const updateProblem = async (req, res) => {
       isActive,
     } = req.body;
 
-    // ==============================
-    // FIND PROBLEM
-    // ==============================
-
     const problem = await Problem.findById(id);
 
     if (!problem) {
@@ -638,135 +422,81 @@ export const updateProblem = async (req, res) => {
       });
     }
 
-    // ==============================
-    // AUTHORIZATION
-    // ==============================
-
     if (
-      String(problem.createdBy) !==
-        String(req.user._id) &&
+      String(problem.createdBy) !== String(req.user._id) &&
       req.user.role !== "admin"
     ) {
       return res.status(403).json({
         success: false,
-        message:
-          "You are not allowed to update this problem",
+        message: "You are not allowed to update this problem",
       });
     }
 
-    // ==============================
     // TITLE + SLUG
-    // ==============================
+    if (title !== undefined && title.trim() !== problem.title) {
+      const newSlug = createSlug(title.trim());
 
-    if (
-      title !== undefined &&
-      title.trim() !== problem.title
-    ) {
-      const newSlug = createSlug(
-        title.trim(),
-      );
-
-      const existingProblem =
-        await Problem.findOne({
-          slug: newSlug,
-          _id: {
-            $ne: problem._id,
-          },
-        });
+      const existingProblem = await Problem.findOne({
+        slug: newSlug,
+        _id: {
+          $ne: problem._id,
+        },
+      });
 
       if (existingProblem) {
         return res.status(409).json({
           success: false,
-          message:
-            "Another problem with this title already exists",
+          message: "Another problem with this title already exists",
         });
       }
 
-      problem.title =
-        title.trim();
+      problem.title = title.trim();
 
-      problem.slug =
-        newSlug;
+      problem.slug = newSlug;
     }
 
-    // ==============================
     // BASIC FIELDS
-    // ==============================
-
     if (topic !== undefined) {
       if (!topic.trim()) {
         return res.status(400).json({
           success: false,
-          message:
-            "Topic cannot be empty",
+          message: "Topic cannot be empty",
         });
       }
 
-      problem.topic =
-        topic.trim();
+      problem.topic = topic.trim();
     }
 
-    if (
-      difficulty !== undefined
-    ) {
-      const allowedDifficulties = [
-        "Easy",
-        "Medium",
-        "Hard",
-      ];
+    if (difficulty !== undefined) {
+      const allowedDifficulties = ["Easy", "Medium", "Hard"];
 
-      if (
-        !allowedDifficulties.includes(
-          difficulty,
-        )
-      ) {
+      if (!allowedDifficulties.includes(difficulty)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Invalid difficulty value",
+          message: "Invalid difficulty value",
         });
       }
 
-      problem.difficulty =
-        difficulty;
+      problem.difficulty = difficulty;
     }
 
-    if (
-      description !== undefined
-    ) {
-      if (
-        !description.trim()
-      ) {
+    if (description !== undefined) {
+      if (!description.trim()) {
         return res.status(400).json({
           success: false,
-          message:
-            "Description cannot be empty",
+          message: "Description cannot be empty",
         });
       }
 
-      problem.description =
-        description.trim();
+      problem.description = description.trim();
     }
-if (
-  timeComplexity !==
-  undefined
-) {
-  problem.timeComplexity =
-    String(
-      timeComplexity,
-    ).trim();
-}
+    if (timeComplexity !== undefined) {
+      problem.timeComplexity = String(timeComplexity).trim();
+    }
 
-if (
-  spaceComplexity !==
-  undefined
-) {
-  problem.spaceComplexity =
-    String(
-      spaceComplexity,
-    ).trim();
-}
-    
+    if (spaceComplexity !== undefined) {
+      problem.spaceComplexity = String(spaceComplexity).trim();
+    }
 
     // ==============================
     // ARRAY FIELDS
@@ -776,221 +506,136 @@ if (
       if (!Array.isArray(tags)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Tags must be an array",
+          message: "Tags must be an array",
         });
       }
 
       problem.tags = tags;
     }
 
-    if (
-      languages !== undefined
-    ) {
-      if (
-        !Array.isArray(
-          languages,
-        )
-      ) {
+    if (languages !== undefined) {
+      if (!Array.isArray(languages)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Languages must be an array",
+          message: "Languages must be an array",
         });
       }
 
-      problem.languages =
-        languages;
+      problem.languages = languages;
     }
 
-    if (
-      constraints !== undefined
-    ) {
-      if (
-        !Array.isArray(
-          constraints,
-        )
-      ) {
+    if (constraints !== undefined) {
+      if (!Array.isArray(constraints)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Constraints must be an array",
+          message: "Constraints must be an array",
         });
       }
 
-      problem.constraints =
-        constraints;
+      problem.constraints = constraints;
     }
 
-    if (
-      companies !== undefined
-    ) {
-      if (
-        !Array.isArray(
-          companies,
-        )
-      ) {
+    if (companies !== undefined) {
+      if (!Array.isArray(companies)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Companies must be an array",
+          message: "Companies must be an array",
         });
       }
 
-      problem.companies =
-        companies;
+      problem.companies = companies;
     }
 
     // ==============================
     // INPUT / OUTPUT
     // ==============================
 
-    if (
-      inputFormat !== undefined
-    ) {
-      problem.inputFormat =
-        inputFormat;
+    if (inputFormat !== undefined) {
+      problem.inputFormat = inputFormat;
     }
 
-    if (
-      outputFormat !== undefined
-    ) {
-      problem.outputFormat =
-        outputFormat;
+    if (outputFormat !== undefined) {
+      problem.outputFormat = outputFormat;
     }
 
     // ==============================
     // TEST CASES
     // ==============================
 
-    if (
-      testCases !== undefined
-    ) {
-      if (
-        !Array.isArray(
-          testCases,
-        )
-      ) {
+    if (testCases !== undefined) {
+      if (!Array.isArray(testCases)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Test cases must be an array",
+          message: "Test cases must be an array",
         });
       }
 
-      for (
-        let i = 0;
-        i < testCases.length;
-        i++
-      ) {
-        const testCase =
-          testCases[i];
+      for (let i = 0; i < testCases.length; i++) {
+        const testCase = testCases[i];
 
-        if (
-          typeof testCase.input !==
-            "string" ||
-          !testCase.input.trim()
-        ) {
+        if (typeof testCase.input !== "string" || !testCase.input.trim()) {
           return res.status(400).json({
             success: false,
-            message:
-              `Test case ${
-                i + 1
-              }: input is required`,
+            message: `Test case ${i + 1}: input is required`,
           });
         }
 
         if (
-          typeof testCase.expectedOutput !==
-            "string" ||
+          typeof testCase.expectedOutput !== "string" ||
           !testCase.expectedOutput.trim()
         ) {
           return res.status(400).json({
             success: false,
-            message:
-              `Test case ${
-                i + 1
-              }: expected output is required`,
+            message: `Test case ${i + 1}: expected output is required`,
           });
         }
       }
 
-      problem.testCases =
-        testCases.map(
-          (testCase) => ({
-            input:
-              testCase.input,
+      problem.testCases = testCases.map((testCase) => ({
+        input: testCase.input,
 
-            expectedOutput:
-              testCase.expectedOutput,
+        expectedOutput: testCase.expectedOutput,
 
-            isHidden:
-              Boolean(
-                testCase.isHidden,
-              ),
-          }),
-        );
+        isHidden: Boolean(testCase.isHidden),
+      }));
     }
 
     // ==============================
     // LIMITS
     // ==============================
 
-    if (
-      timeLimit !== undefined
-    ) {
-      const parsedTimeLimit =
-        Number(timeLimit);
+    if (timeLimit !== undefined) {
+      const parsedTimeLimit = Number(timeLimit);
 
-      if (
-        Number.isNaN(
-          parsedTimeLimit,
-        ) ||
-        parsedTimeLimit <= 0
-      ) {
+      if (Number.isNaN(parsedTimeLimit) || parsedTimeLimit <= 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "Time limit must be greater than 0",
+          message: "Time limit must be greater than 0",
         });
       }
 
-      problem.timeLimit =
-        parsedTimeLimit;
+      problem.timeLimit = parsedTimeLimit;
     }
 
-    if (
-      memoryLimit !== undefined
-    ) {
-      const parsedMemoryLimit =
-        Number(memoryLimit);
+    if (memoryLimit !== undefined) {
+      const parsedMemoryLimit = Number(memoryLimit);
 
-      if (
-        Number.isNaN(
-          parsedMemoryLimit,
-        ) ||
-        parsedMemoryLimit <= 0
-      ) {
+      if (Number.isNaN(parsedMemoryLimit) || parsedMemoryLimit <= 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "Memory limit must be greater than 0",
+          message: "Memory limit must be greater than 0",
         });
       }
 
-      problem.memoryLimit =
-        parsedMemoryLimit;
+      problem.memoryLimit = parsedMemoryLimit;
     }
 
     // ==============================
     // ACTIVE STATUS
     // ==============================
 
-    if (
-      isActive !== undefined
-    ) {
-      problem.isActive =
-        Boolean(isActive);
+    if (isActive !== undefined) {
+      problem.isActive = Boolean(isActive);
     }
 
     // ==============================
@@ -1001,63 +646,47 @@ if (
 
     return res.status(200).json({
       success: true,
-      message:
-        "Problem updated successfully",
+      message: "Problem updated successfully",
       problem,
     });
   } catch (error) {
-    console.error(
-      "UPDATE PROBLEM ERROR:",
-      error,
-    );
+    console.error("UPDATE PROBLEM ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to update problem",
+      message: "Failed to update problem",
       error: error.message,
     });
   }
 };
 
-
-export const deleteProblem = async (
-  req,
-  res,
-) => {
+export const deleteProblem = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const problem =
-      await Problem.findById(id);
+    const problem = await Problem.findById(id);
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-        message:
-          "Problem not found",
+        message: "Problem not found",
       });
     }
 
     if (
-      String(problem.createdBy) !==
-        String(req.user._id) &&
+      String(problem.createdBy) !== String(req.user._id) &&
       req.user.role !== "admin"
     ) {
       return res.status(403).json({
         success: false,
-        message:
-          "You are not allowed to delete this problem",
+        message: "You are not allowed to delete this problem",
       });
     }
 
     // Check if problem is already used in any test
-    const testUsingProblem =
-      await Test.findOne({
-        "problems.problem": id,
-      }).select(
-        "_id title status",
-      );
+    const testUsingProblem = await Test.findOne({
+      "problems.problem": id,
+    }).select("_id title status");
 
     if (testUsingProblem) {
       return res.status(400).json({
@@ -1065,35 +694,25 @@ export const deleteProblem = async (
         message:
           "Cannot delete this problem because it is already used in a test",
         test: {
-          _id:
-            testUsingProblem._id,
-          title:
-            testUsingProblem.title,
-          status:
-            testUsingProblem.status,
+          _id: testUsingProblem._id,
+          title: testUsingProblem.title,
+          status: testUsingProblem.status,
         },
       });
     }
 
-    await Problem.findByIdAndDelete(
-      id,
-    );
+    await Problem.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,
-      message:
-        "Problem deleted successfully",
+      message: "Problem deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "DELETE PROBLEM ERROR:",
-      error,
-    );
+    console.error("DELETE PROBLEM ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to delete problem",
+      message: "Failed to delete problem",
       error: error.message,
     });
   }

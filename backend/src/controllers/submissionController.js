@@ -18,10 +18,6 @@ export const submitCode = async (req, res) => {
   try {
     const { testId, problemId, code, language } = req.body;
 
-    // ========================================================
-    // BASIC VALIDATION
-    // ========================================================
-
     if (!testId || !problemId || !code?.trim() || !language) {
       return res.status(400).json({
         success: false,
@@ -411,11 +407,6 @@ export const submitCode = async (req, res) => {
   }
 };
 
-// ============================================================
-// MY SUBMISSIONS
-// GET /api/submissions/my
-// ============================================================
-
 export const getMySubmissions = async (req, res) => {
   try {
     const submissions = await Submission.find({
@@ -473,11 +464,6 @@ export const getMySubmissions = async (req, res) => {
     });
   }
 };
-
-// ============================================================
-// SUBMISSIONS FOR ONE PROBLEM
-// GET /api/submissions/problem/:problemId
-// ============================================================
 
 export const getProblemSubmissions = async (req, res) => {
   try {
