@@ -1,7 +1,7 @@
 import Submission from "../models/submission.js";
 import Test from "../models/test.js";
 import TestAttempt from "../models/testAttempt.js";
-import User from "../models/User.js";
+import User from "../models/user.js";
 
 // ============================================================
 // STUDENT DASHBOARD

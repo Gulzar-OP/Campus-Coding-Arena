@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import User from "../models/User.js";
+import User from "../models/user.js";
 import Submission from "../models/submission.js";
 import Problem from "../models/Problem.js";
 import Test from "../models/test.js";
