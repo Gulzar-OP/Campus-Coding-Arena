@@ -1,10 +1,6 @@
-
 import { useState } from "react";
 
-import {
-  Link,
-  useNavigate,
-} from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   ArrowRight,
@@ -19,57 +15,38 @@ import {
   Users,
 } from "lucide-react";
 
-import {
-  motion,
-} from "framer-motion";
+import { motion } from "framer-motion";
 
 import toast from "react-hot-toast";
 
-import {
-  useAuth,
-} from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 const Login = () => {
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
-  const { login } =
-    useAuth();
+  const { login } = useAuth();
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [
-    showPassword,
-    setShowPassword,
-  ] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [form, setForm] =
-    useState({
-      email: "",
-      password: "",
-    });
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
 
   const handleChange = (e) => {
     setForm((previous) => ({
       ...previous,
-      [e.target.name]:
-        e.target.value,
+      [e.target.name]: e.target.value,
     }));
   };
 
-  const handleSubmit = async (
-    e,
-  ) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (
-      !form.email ||
-      !form.password
-    ) {
-      toast.error(
-        "Email and password are required",
-      );
+    if (!form.email || !form.password) {
+      toast.error("Email and password are required");
 
       return;
     }
@@ -77,20 +54,11 @@ const Login = () => {
     try {
       setLoading(true);
 
-      const user =
-        await login(
-          form.email,
-          form.password,
-        );
+      const user = await login(form.email, form.password);
 
-      toast.success(
-        "Login successful",
-      );
+      toast.success("Login successful");
 
-      if (
-        user.role === "teacher" ||
-        user.role === "admin"
-      ) {
+      if (user.role === "teacher" || user.role === "admin") {
         navigate("/teacher", {
           replace: true,
         });
@@ -100,11 +68,7 @@ const Login = () => {
         });
       }
     } catch (error) {
-      toast.error(
-        error.response?.data
-          ?.message ||
-          "Login failed",
-      );
+      toast.error(error.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -181,10 +145,7 @@ const Login = () => {
           <div className="relative z-10 flex w-full flex-col justify-between p-10 xl:p-14">
             {/* Logo */}
 
-            <Link
-              to="/"
-              className="flex w-fit items-center gap-3"
-            >
+            <Link to="/" className="flex w-fit items-center gap-3">
               <motion.div
                 whileHover={{
                   rotate: 8,
@@ -198,9 +159,7 @@ const Login = () => {
               <div>
                 <h1 className="text-xl font-bold tracking-tight">
                   Campus
-                  <span className="text-indigo-400">
-                    Arena
-                  </span>
+                  <span className="text-indigo-400">Arena</span>
                 </h1>
 
                 <p className="text-[10px] uppercase tracking-[0.25em] text-gray-500">
@@ -228,7 +187,6 @@ const Login = () => {
                 className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-300"
               >
                 <Sparkles size={15} />
-
                 Campus Coding Platform
               </motion.div>
 
@@ -249,13 +207,10 @@ const Login = () => {
               >
                 Build skills.
                 <br />
-
                 <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
                   Crack assessments.
                 </span>
-
                 <br />
-
                 Grow faster.
               </motion.h2>
 
@@ -274,11 +229,8 @@ const Login = () => {
                 }}
                 className="mt-5 max-w-md text-base leading-7 text-gray-400"
               >
-                Practice coding,
-                participate in campus
-                assessments and track
-                your performance from one
-                powerful platform.
+                Practice coding, participate in campus assessments and track
+                your performance from one powerful platform.
               </motion.p>
 
               {/* Feature Cards */}
@@ -298,47 +250,35 @@ const Login = () => {
                 }}
                 className="mt-10 grid gap-3 xl:grid-cols-3"
               >
-                {features.map(
-                  ({
-                    icon: Icon,
-                    title,
-                    text,
-                  }) => (
-                    <motion.div
-                      key={title}
-                      whileHover={{
-                        y: -4,
-                      }}
-                      className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 backdrop-blur-md"
-                    >
-                      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
-                        <Icon size={18} />
-                      </div>
+                {features.map(({ icon: Icon, title, text }) => (
+                  <motion.div
+                    key={title}
+                    whileHover={{
+                      y: -4,
+                    }}
+                    className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 backdrop-blur-md"
+                  >
+                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
+                      <Icon size={18} />
+                    </div>
 
-                      <p className="text-sm font-semibold">
-                        {title}
-                      </p>
+                    <p className="text-sm font-semibold">{title}</p>
 
-                      <p className="mt-1 text-xs leading-5 text-gray-500">
-                        {text}
-                      </p>
-                    </motion.div>
-                  ),
-                )}
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      {text}
+                    </p>
+                  </motion.div>
+                ))}
               </motion.div>
             </div>
 
             {/* Bottom */}
 
             <div className="flex items-center justify-between text-xs text-gray-500">
-              <p>
-                © 2026 Campus Coding
-                Arena
-              </p>
+              <p>© 2026 Campus Coding Arena</p>
 
               <div className="flex items-center gap-2">
                 <Users size={14} />
-
                 Built for campuses
               </div>
             </div>
@@ -370,10 +310,7 @@ const Login = () => {
             {/* Mobile Logo */}
 
             <div className="mb-10 flex items-center justify-between lg:hidden">
-              <Link
-                to="/"
-                className="flex items-center gap-3"
-              >
+              <Link to="/" className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
                   <Code2 size={23} />
                 </div>
@@ -381,9 +318,7 @@ const Login = () => {
                 <div>
                   <h1 className="text-xl font-bold">
                     Campus
-                    <span className="text-indigo-600">
-                      Arena
-                    </span>
+                    <span className="text-indigo-600">Arena</span>
                   </h1>
 
                   <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400">
@@ -411,7 +346,6 @@ const Login = () => {
             >
               <div className="mb-3 flex items-center gap-2 text-sm font-medium text-indigo-600">
                 <Braces size={17} />
-
                 Welcome back
               </div>
 
@@ -420,9 +354,7 @@ const Login = () => {
               </h1>
 
               <p className="mt-3 text-sm leading-6 text-gray-500 sm:text-base">
-                Enter your credentials
-                below to continue your
-                coding journey.
+                Enter your credentials below to continue your coding journey.
               </p>
             </motion.div>
 
@@ -460,9 +392,7 @@ const Login = () => {
                     type="email"
                     name="email"
                     value={form.email}
-                    onChange={
-                      handleChange
-                    }
+                    onChange={handleChange}
                     placeholder="you@example.com"
                     autoComplete="email"
                     className="
@@ -503,18 +433,10 @@ const Login = () => {
                 <div className="relative mt-2">
                   <input
                     id="password"
-                    type={
-                      showPassword
-                        ? "text"
-                        : "password"
-                    }
+                    type={showPassword ? "text" : "password"}
                     name="password"
-                    value={
-                      form.password
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.password}
+                    onChange={handleChange}
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     className="
@@ -536,23 +458,10 @@ const Login = () => {
                       scale: 0.9,
                     }}
                     type="button"
-                    onClick={() =>
-                      setShowPassword(
-                        (previous) =>
-                          !previous,
-                      )
-                    }
+                    onClick={() => setShowPassword((previous) => !previous)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
                   >
-                    {showPassword ? (
-                      <EyeOff
-                        size={19}
-                      />
-                    ) : (
-                      <Eye
-                        size={19}
-                      />
-                    )}
+                    {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
                   </motion.button>
                 </div>
               </div>
@@ -592,17 +501,12 @@ const Login = () => {
                 {loading ? (
                   <>
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-
                     Signing in...
                   </>
                 ) : (
                   <>
-                    <LogIn
-                      size={18}
-                    />
-
+                    <LogIn size={18} />
                     Sign in
-
                     <ArrowRight
                       size={17}
                       className="transition-transform duration-200 group-hover:translate-x-1"
@@ -647,8 +551,7 @@ const Login = () => {
             {/* Footer */}
 
             <p className="mt-6 text-center text-xs leading-5 text-gray-400">
-              By continuing, you agree
-              to Campus Arena's{" "}
+              By continuing, you agree to Campus Arena's{" "}
               <span className="cursor-pointer text-gray-600 hover:text-indigo-600">
                 Terms
               </span>{" "}

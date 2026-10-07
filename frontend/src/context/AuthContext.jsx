@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import api from "../services/api";
 
@@ -11,8 +6,7 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] =
-    useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // ===================================
   // GET CURRENT USER
@@ -20,9 +14,7 @@ export const AuthProvider = ({ children }) => {
 
   const getMe = async () => {
     try {
-      const response = await api.get(
-        "/auth/me",
-      );
+      const response = await api.get("/auth/me");
 
       setUser(response.data.user);
     } catch (error) {
@@ -36,17 +28,11 @@ export const AuthProvider = ({ children }) => {
   // LOGIN
   // ===================================
 
-  const login = async (
-    email,
-    password,
-  ) => {
-    const response = await api.post(
-      "/auth/login",
-      {
-        email,
-        password,
-      },
-    );
+  const login = async (email, password) => {
+    const response = await api.post("/auth/login", {
+      email,
+      password,
+    });
 
     setUser(response.data.user);
 
@@ -57,13 +43,8 @@ export const AuthProvider = ({ children }) => {
   // REGISTER
   // ===================================
 
-  const register = async (
-    formData,
-  ) => {
-    const response = await api.post(
-      "/auth/register",
-      formData,
-    );
+  const register = async (formData) => {
+    const response = await api.post("/auth/register", formData);
 
     setUser(response.data.user);
 
@@ -76,9 +57,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.post(
-        "/auth/logout",
-      );
+      await api.post("/auth/logout");
     } finally {
       setUser(null);
     }
@@ -104,5 +83,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () =>
-  useContext(AuthContext);
+export const useAuth = () => useContext(AuthContext);

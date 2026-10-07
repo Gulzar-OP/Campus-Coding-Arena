@@ -16,22 +16,50 @@ import { getAttemptDeadline } from "../utils/getAttemptDeadline.js";
 
 export const submitCode = async (req, res) => {
   try {
-    const { testId, problemId, code, language } = req.body;
+    // ========================================================
+    // REQUEST DATA
+    // ========================================================
 
-    if (!testId || !problemId || !code?.trim() || !language) {
-      return res.status(400).json({
-        success: false,
-        message: "Test, problem, code and language are required",
-      });
-    }
+    const {
+      testId,
+      problemId,
+      code,
+      language,
+    } = req.body;
+
+    // ========================================================
+    // BASIC VALIDATION
+    // ========================================================
 
     if (
-      !mongoose.Types.ObjectId.isValid(testId) ||
-      !mongoose.Types.ObjectId.isValid(problemId)
+      !testId ||
+      !problemId ||
+      !code?.trim() ||
+      !language
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid test or problem id",
+        message:
+          "Test, problem, code and language are required",
+      });
+    }
+
+    // ========================================================
+    // VALID OBJECT IDS
+    // ========================================================
+
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        testId,
+      ) ||
+      !mongoose.Types.ObjectId.isValid(
+        problemId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid test or problem id",
       });
     }
 
@@ -39,7 +67,8 @@ export const submitCode = async (req, res) => {
     // GET TEST
     // ========================================================
 
-    const test = await Test.findById(testId);
+    const test =
+      await Test.findById(testId);
 
     if (!test) {
       return res.status(404).json({
@@ -49,30 +78,36 @@ export const submitCode = async (req, res) => {
     }
 
     // ========================================================
-    // TEST AVAILABILITY
+    // CHECK TEST AVAILABILITY
     // ========================================================
 
-    if (test.status !== "published" || test.isActive === false) {
+    if (
+      test.status !== "published" ||
+      test.isActive === false
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Test is not available",
+        message:
+          "Test is not available",
       });
     }
 
     // ========================================================
-    // ACTIVE ATTEMPT
+    // GET ACTIVE ATTEMPT
     // ========================================================
 
-    const attempt = await TestAttempt.findOne({
-      test: testId,
-      student: req.user._id,
-      status: "in_progress",
-    });
+    const attempt =
+      await TestAttempt.findOne({
+        test: testId,
+        student: req.user._id,
+        status: "in_progress",
+      });
 
     if (!attempt) {
       return res.status(404).json({
         success: false,
-        message: "Active test attempt not found",
+        message:
+          "Active test attempt not found",
       });
     }
 
@@ -80,13 +115,21 @@ export const submitCode = async (req, res) => {
     // TIMER CHECK
     // ========================================================
 
-    const deadline = getAttemptDeadline(attempt, test);
+    const deadline =
+      getAttemptDeadline(
+        attempt,
+        test,
+      );
 
     const now = new Date();
 
-    const deadlineDate = new Date(deadline);
+    const deadlineDate =
+      new Date(deadline);
 
-    if (now.getTime() >= deadlineDate.getTime()) {
+    if (
+      now.getTime() >=
+      deadlineDate.getTime()
+    ) {
       attempt.status = "expired";
 
       attempt.submittedAt = now;
@@ -95,7 +138,8 @@ export const submitCode = async (req, res) => {
 
       return res.status(403).json({
         success: false,
-        message: "Assessment time has expired",
+        message:
+          "Assessment time has expired",
       });
     }
 
@@ -103,14 +147,20 @@ export const submitCode = async (req, res) => {
     // CHECK PROBLEM BELONGS TO TEST
     // ========================================================
 
-    const testProblem = test.problems.find(
-      (item) => String(item.problem?._id || item.problem) === String(problemId),
-    );
+    const testProblem =
+      test.problems.find(
+        (item) =>
+          String(
+            item.problem?._id ||
+              item.problem,
+          ) === String(problemId),
+      );
 
     if (!testProblem) {
       return res.status(403).json({
         success: false,
-        message: "Problem does not belong to this test",
+        message:
+          "Problem does not belong to this test",
       });
     }
 
@@ -118,19 +168,26 @@ export const submitCode = async (req, res) => {
     // GET PROBLEM
     // ========================================================
 
-    const problem = await Problem.findById(problemId);
+    const problem =
+      await Problem.findById(
+        problemId,
+      );
 
     if (!problem) {
       return res.status(404).json({
         success: false,
-        message: "Problem not found",
+        message:
+          "Problem not found",
       });
     }
 
-    if (problem.isActive === false) {
+    if (
+      problem.isActive === false
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Problem is inactive",
+        message:
+          "Problem is inactive",
       });
     }
 
@@ -138,10 +195,16 @@ export const submitCode = async (req, res) => {
     // CHECK TEST CASES
     // ========================================================
 
-    if (!Array.isArray(problem.testCases) || problem.testCases.length === 0) {
+    if (
+      !Array.isArray(
+        problem.testCases,
+      ) ||
+      problem.testCases.length === 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "No test cases found for this problem",
+        message:
+          "No test cases found for this problem",
       });
     }
 
@@ -149,61 +212,250 @@ export const submitCode = async (req, res) => {
     // PREPARE TEST CASES
     // ========================================================
 
-    const testCases = problem.testCases.map((item) => ({
-      input: item.input || "",
+    const testCases =
+      problem.testCases.map(
+        (item) => ({
+          input: String(
+            item.input ?? "",
+          ),
 
-      expectedOutput: item.expectedOutput || "",
+          expectedOutput: String(
+            item.expectedOutput ?? "",
+          ),
 
-      isHidden: Boolean(item.isHidden),
-    }));
+          isHidden: Boolean(
+            item.isHidden,
+          ),
+        }),
+      );
 
     // ========================================================
-    // EXECUTE CODE
+    // EXECUTION DEBUG
+    // Hidden input/output actual values print nahi karenge
+    // ========================================================
+
+    console.log(
+      "\n==============================================",
+    );
+
+    console.log(
+      "🚀 SUBMISSION EXECUTION REQUEST",
+    );
+
+    console.log({
+      userId:
+        req.user._id.toString(),
+
+      testId:
+        testId.toString(),
+
+      problemId:
+        problemId.toString(),
+
+      language,
+
+      codeLength:
+        code.length,
+
+      totalTestCases:
+        testCases.length,
+    });
+
+    console.log(
+      "TEST CASE DETAILS:",
+      testCases.map(
+        (
+          testCase,
+          index,
+        ) => ({
+          testCase:
+            index + 1,
+
+          inputLength:
+            testCase.input.length,
+
+          expectedOutputLength:
+            testCase
+              .expectedOutput
+              .length,
+
+          hidden:
+            testCase.isHidden,
+        }),
+      ),
+    );
+
+    console.log(
+      "==============================================\n",
+    );
+
+    // ========================================================
+    // EXECUTE CODE THROUGH BULLMQ
     // ========================================================
 
     let runnerResult;
 
     try {
-      runnerResult = await queueCodeExecution({
-        code,
-        language,
-        testCases,
-      });
-    } catch (runnerError) {
-      console.error("SUBMISSION CODE RUNNER ERROR:", runnerError);
+      runnerResult =
+        await queueCodeExecution({
+          code,
+          language,
+          testCases,
+        });
 
-      return res.status(500).json({
-        success: false,
-        message: "Code execution service failed",
-        error: runnerError.message || "Unknown execution error",
+      console.log(
+        "\n==============================================",
+      );
+
+      console.log(
+        "✅ SUBMISSION RUNNER RESULT",
+      );
+
+      console.log({
+        status:
+          runnerResult?.status,
+
+        passed:
+          runnerResult
+            ?.passedTestCases,
+
+        total:
+          runnerResult
+            ?.totalTestCases,
+
+        duration:
+          runnerResult
+            ?.totalDurationMs,
       });
+
+      console.log(
+        "==============================================\n",
+      );
+    } catch (
+      runnerError
+    ) {
+      console.error(
+        "\n==============================================",
+      );
+
+      console.error(
+        "❌ SUBMISSION CODE RUNNER ERROR",
+      );
+
+      console.error(
+        "MESSAGE:",
+        runnerError.message,
+      );
+
+      console.error(
+        "CODE:",
+        runnerError.code,
+      );
+
+      console.error(
+        "STACK:",
+        runnerError.stack,
+      );
+
+      console.error(
+        "==============================================\n",
+      );
+
+      return res
+        .status(503)
+        .json({
+          success: false,
+
+          message:
+            "Code execution service failed",
+
+          error:
+            runnerError.message ||
+            "Unknown execution error",
+        });
     }
 
     // ========================================================
-    // RUNNER RESULT
+    // VALIDATE RUNNER RESPONSE
     // ========================================================
 
-    const results = runnerResult.results || [];
+    if (
+      !runnerResult ||
+      typeof runnerResult !==
+        "object"
+    ) {
+      console.error(
+        "❌ Invalid runner response:",
+        runnerResult,
+      );
+
+      return res
+        .status(503)
+        .json({
+          success: false,
+
+          message:
+            "Invalid response from code runner",
+        });
+    }
+
+    // ========================================================
+    // RESULTS
+    // ========================================================
+
+    const results =
+      Array.isArray(
+        runnerResult.results,
+      )
+        ? runnerResult.results
+        : [];
+
+    // ========================================================
+    // PASSED TEST CASES
+    // ========================================================
 
     const passedTestCases =
-      runnerResult.passedTestCases ??
+      runnerResult
+        .passedTestCases ??
       results.filter(
-        (item) => item.passed === true || item.status === "Accepted",
+        (item) =>
+          item.passed ===
+            true ||
+          item.status ===
+            "Accepted",
       ).length;
 
-    const totalTestCases = runnerResult.totalTestCases ?? testCases.length;
+    // ========================================================
+    // TOTAL TEST CASES
+    // ========================================================
+
+    const totalTestCases =
+      runnerResult
+        .totalTestCases ??
+      testCases.length;
 
     // ========================================================
     // VERDICT
     // ========================================================
 
-    let verdict = runnerResult.status || "Wrong Answer";
+    let verdict =
+      runnerResult.status ||
+      "Wrong Answer";
 
-    if (passedTestCases === totalTestCases && totalTestCases > 0) {
+    if (
+      passedTestCases ===
+        totalTestCases &&
+      totalTestCases > 0
+    ) {
       verdict = "Accepted";
     }
 
-    if (String(verdict).toLowerCase() === "accepted") {
+    if (
+      String(
+        verdict,
+      ).toLowerCase() ===
+      "accepted"
+    ) {
       verdict = "Accepted";
     }
 
@@ -211,87 +463,141 @@ export const submitCode = async (req, res) => {
     // EXECUTION DETAILS
     // ========================================================
 
-    const firstResult = results[0] || {};
+    const firstResult =
+      results[0] || {};
 
     const executionTime =
-      firstResult.executionTimeMs ?? firstResult.time ?? null;
+      firstResult
+        .executionTimeMs ??
+      firstResult.time ??
+      runnerResult
+        .totalDurationMs ??
+      null;
 
-    const memory = firstResult.memory ?? null;
+    const memory =
+      firstResult.memory ??
+      runnerResult.memory ??
+      null;
 
     const compileOutput =
-      runnerResult.compileOutput || firstResult.compileOutput || null;
+      runnerResult
+        .compileOutput ||
+      firstResult
+        .compileOutput ||
+      null;
 
-    const stderr = runnerResult.stderr || firstResult.stderr || null;
+    const stderr =
+      runnerResult.stderr ||
+      firstResult.stderr ||
+      null;
 
     // ========================================================
     // FIND TEST-WISE SUBMISSION
-    // One User + One Test = One Submission document
+    // ONE USER + ONE TEST = ONE DOCUMENT
     // ========================================================
 
-    let submission = await Submission.findOne({
-      user: req.user._id,
-
-      test: testId,
-    });
+    let submission =
+      await Submission.findOne({
+        user: req.user._id,
+        test: testId,
+      });
 
     // ========================================================
     // BLOCK AFTER FINAL SUBMISSION
     // ========================================================
 
-    if (submission?.status === "submitted") {
+    if (
+      submission?.status ===
+      "submitted"
+    ) {
       return res.status(409).json({
         success: false,
-        message: "This test has already been submitted",
+        message:
+          "This test has already been submitted",
       });
     }
 
     // ========================================================
-    // CREATE FIRST SUBMISSION DOCUMENT
+    // CREATE SUBMISSION IF NOT EXISTS
     // ========================================================
 
     if (!submission) {
-      submission = new Submission({
-        user: req.user._id,
-        test: testId,
-        problems: [],
-        status: "in_progress",
-      });
+      submission =
+        new Submission({
+          user:
+            req.user._id,
+
+          test:
+            testId,
+
+          problems: [],
+
+          status:
+            "in_progress",
+        });
     }
 
     // ========================================================
-    // FIND EXISTING PROBLEM
+    // FIND EXISTING PROBLEM SUBMISSION
     // ========================================================
 
-    const existingProblemIndex = submission.problems.findIndex(
-      (item) => String(item.problem) === String(problemId),
-    );
+    const existingProblemIndex =
+      submission.problems.findIndex(
+        (item) =>
+          String(
+            item.problem,
+          ) ===
+          String(
+            problemId,
+          ),
+      );
 
     // ========================================================
     // PROBLEM SUBMISSION DATA
     // ========================================================
 
     const problemSubmission = {
-      problem: problemId,
+      problem:
+        problemId,
+
       code,
+
       language,
+
       verdict,
+
       passedTestCases,
+
       totalTestCases,
+
       executionTime,
+
       memory,
+
       compileOutput,
+
       stderr,
-      submittedAt: new Date(),
+
+      submittedAt:
+        new Date(),
     };
 
     // ========================================================
     // UPDATE EXISTING OR ADD NEW
     // ========================================================
 
-    if (existingProblemIndex !== -1) {
-      submission.problems[existingProblemIndex] = problemSubmission;
+    if (
+      existingProblemIndex !==
+      -1
+    ) {
+      submission.problems[
+        existingProblemIndex
+      ] =
+        problemSubmission;
     } else {
-      submission.problems.push(problemSubmission);
+      submission.problems.push(
+        problemSubmission,
+      );
     }
 
     // ========================================================
@@ -301,26 +607,48 @@ export const submitCode = async (req, res) => {
     await submission.save();
 
     // ========================================================
-    // UPDATE TEMPORARY ATTEMPT
+    // UPDATE TEST ATTEMPT
     // ========================================================
 
-    const attemptProblemIndex = attempt.problemResults.findIndex(
-      (item) => String(item.problem) === String(problemId),
-    );
+    const attemptProblemIndex =
+      attempt.problemResults.findIndex(
+        (item) =>
+          String(
+            item.problem,
+          ) ===
+          String(
+            problemId,
+          ),
+      );
 
-    const problemStatus = verdict === "Accepted" ? "passed" : "failed";
+    const problemStatus =
+      verdict === "Accepted"
+        ? "passed"
+        : "failed";
 
-    if (attemptProblemIndex !== -1) {
-      attempt.problemResults[attemptProblemIndex].status = problemStatus;
+    if (
+      attemptProblemIndex !==
+      -1
+    ) {
+      attempt.problemResults[
+        attemptProblemIndex
+      ].status =
+        problemStatus;
 
-      attempt.problemResults[attemptProblemIndex].submission = submission._id;
+      attempt.problemResults[
+        attemptProblemIndex
+      ].submission =
+        submission._id;
     } else {
       attempt.problemResults.push({
-        problem: problemId,
+        problem:
+          problemId,
 
-        status: problemStatus,
+        status:
+          problemStatus,
 
-        submission: submission._id,
+        submission:
+          submission._id,
       });
     }
 
@@ -330,82 +658,579 @@ export const submitCode = async (req, res) => {
     // QUESTION STATS
     // ========================================================
 
-    const attemptedProblems = submission.problems.length;
+    const attemptedProblems =
+      submission.problems.length;
 
-    const solvedProblems = submission.problems.filter(
-      (item) => item.verdict === "Accepted",
-    ).length;
+    const solvedProblems =
+      submission.problems.filter(
+        (item) =>
+          item.verdict ===
+          "Accepted",
+      ).length;
 
-    const totalProblems = test.problems.length;
+    const totalProblems =
+      test.problems.length;
 
     // ========================================================
     // SAFE RESULTS
-    // Hidden test cases ke input/output expose nahi karenge
+    // Hidden test cases ke input/output frontend ko nahi denge
     // ========================================================
 
-    const safeResults = results.map((result, index) => {
-      const originalCase = testCases[index];
+    const safeResults =
+      results.map(
+        (
+          result,
+          index,
+        ) => {
+          const originalCase =
+            testCases[
+              index
+            ];
 
-      const isHidden = originalCase?.isHidden === true;
+          const isHidden =
+            originalCase
+              ?.isHidden ===
+            true;
 
-      if (isHidden) {
-        return {
-          testCase: result.testCase || index + 1,
+          if (isHidden) {
+            return {
+              testCase:
+                result.testCase ||
+                index + 1,
 
-          hidden: true,
+              hidden: true,
+
+              status:
+                result.status ||
+                (result.passed
+                  ? "Accepted"
+                  : "Wrong Answer"),
+
+              executionTimeMs:
+                result
+                  .executionTimeMs ??
+                result.time ??
+                null,
+            };
+          }
+
+          return result;
+        },
+      );
+
+    // ========================================================
+    // SUCCESS RESPONSE
+    // ========================================================
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+
+        message:
+          verdict ===
+          "Accepted"
+            ? "Problem accepted"
+            : verdict,
+
+        verdict,
+
+        passedTestCases,
+
+        totalTestCases,
+
+        attemptedProblems,
+
+        solvedProblems,
+
+        totalProblems,
+
+        submission: {
+          _id:
+            submission._id,
+
+          test:
+            submission.test,
+
+          problem:
+            problemId,
+
+          verdict,
+
+          passedTestCases,
+
+          totalTestCases,
+
+          executionTime,
+
+          memory,
+
+          compileOutput,
+
+          stderr,
 
           status:
-            result.status || (result.passed ? "Accepted" : "Wrong Answer"),
+            submission.status,
+        },
 
-          executionTimeMs: result.executionTimeMs ?? result.time ?? null,
-        };
-      }
-
-      return result;
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: verdict === "Accepted" ? "Problem accepted" : verdict,
-      verdict,
-      passedTestCases,
-      totalTestCases,
-      attemptedProblems,
-      solvedProblems,
-      totalProblems,
-      submission: {
-        _id: submission._id,
-        test: submission.test,
-        problem: problemId,
-        verdict,
-        passedTestCases,
-        totalTestCases,
-        executionTime,
-        memory,
-        compileOutput,
-        stderr,
-        status: submission.status,
-      },
-
-      results: safeResults,
-    });
-  } catch (error) {
-    console.error("SUBMIT CODE ERROR:", error);
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Submission already exists for this test. Please retry.",
+        results:
+          safeResults,
       });
+  } catch (error) {
+    console.error(
+      "\n==============================================",
+    );
+
+    console.error(
+      "❌ SUBMIT CODE ERROR",
+    );
+
+    console.error(
+      "MESSAGE:",
+      error.message,
+    );
+
+    console.error(
+      "CODE:",
+      error.code,
+    );
+
+    console.error(
+      "STACK:",
+      error.stack,
+    );
+
+    console.error(
+      "==============================================\n",
+    );
+
+    // ========================================================
+    // DUPLICATE SUBMISSION ERROR
+    // ========================================================
+
+    if (
+      error.code === 11000
+    ) {
+      return res
+        .status(409)
+        .json({
+          success: false,
+
+          message:
+            "Submission already exists for this test. Please retry.",
+        });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: "Submission failed",
-      error: error.message,
-    });
+    // ========================================================
+    // INTERNAL SERVER ERROR
+    // ========================================================
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+
+        message:
+          "Submission failed",
+
+        error:
+          error.message,
+      });
   }
 };
+
+// export const submitCode = async (req, res) => {
+//   try {
+//     const { testId, problemId, code, language } = req.body;
+
+//     if (!testId || !problemId || !code?.trim() || !language) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Test, problem, code and language are required",
+//       });
+//     }
+
+//     if (
+//       !mongoose.Types.ObjectId.isValid(testId) ||
+//       !mongoose.Types.ObjectId.isValid(problemId)
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid test or problem id",
+//       });
+//     }
+
+//     // ========================================================
+//     // GET TEST
+//     // ========================================================
+
+//     const test = await Test.findById(testId);
+
+//     if (!test) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Test not found",
+//       });
+//     }
+
+//     // ========================================================
+//     // TEST AVAILABILITY
+//     // ========================================================
+
+//     if (test.status !== "published" || test.isActive === false) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Test is not available",
+//       });
+//     }
+
+//     // ========================================================
+//     // ACTIVE ATTEMPT
+//     // ========================================================
+
+//     const attempt = await TestAttempt.findOne({
+//       test: testId,
+//       student: req.user._id,
+//       status: "in_progress",
+//     });
+
+//     if (!attempt) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Active test attempt not found",
+//       });
+//     }
+
+//     // ========================================================
+//     // TIMER CHECK
+//     // ========================================================
+
+//     const deadline = getAttemptDeadline(attempt, test);
+
+//     const now = new Date();
+
+//     const deadlineDate = new Date(deadline);
+
+//     if (now.getTime() >= deadlineDate.getTime()) {
+//       attempt.status = "expired";
+
+//       attempt.submittedAt = now;
+
+//       await attempt.save();
+
+//       return res.status(403).json({
+//         success: false,
+//         message: "Assessment time has expired",
+//       });
+//     }
+
+//     // ========================================================
+//     // CHECK PROBLEM BELONGS TO TEST
+//     // ========================================================
+
+//     const testProblem = test.problems.find(
+//       (item) => String(item.problem?._id || item.problem) === String(problemId),
+//     );
+
+//     if (!testProblem) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Problem does not belong to this test",
+//       });
+//     }
+
+//     // ========================================================
+//     // GET PROBLEM
+//     // ========================================================
+
+//     const problem = await Problem.findById(problemId);
+
+//     if (!problem) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Problem not found",
+//       });
+//     }
+
+//     if (problem.isActive === false) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Problem is inactive",
+//       });
+//     }
+
+//     // ========================================================
+//     // CHECK TEST CASES
+//     // ========================================================
+
+//     if (!Array.isArray(problem.testCases) || problem.testCases.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No test cases found for this problem",
+//       });
+//     }
+
+//     // ========================================================
+//     // PREPARE TEST CASES
+//     // ========================================================
+
+//     const testCases = problem.testCases.map((item) => ({
+//       input: item.input || "",
+
+//       expectedOutput: item.expectedOutput || "",
+
+//       isHidden: Boolean(item.isHidden),
+//     }));
+
+//     // ========================================================
+//     // EXECUTE CODE
+//     // ========================================================
+
+//     let runnerResult;
+
+//     try {
+//       runnerResult = await queueCodeExecution({
+//         code,
+//         language,
+//         testCases,
+//       });
+//     } catch (runnerError) {
+//       console.error("SUBMISSION CODE RUNNER ERROR:", runnerError);
+
+//       return res.status(500).json({
+//         success: false,
+//         message: "Code execution service failed",
+//         error: runnerError.message || "Unknown execution error",
+//       });
+//     }
+
+//     // ========================================================
+//     // RUNNER RESULT
+//     // ========================================================
+
+//     const results = runnerResult.results || [];
+
+//     const passedTestCases =
+//       runnerResult.passedTestCases ??
+//       results.filter(
+//         (item) => item.passed === true || item.status === "Accepted",
+//       ).length;
+
+//     const totalTestCases = runnerResult.totalTestCases ?? testCases.length;
+
+//     // ========================================================
+//     // VERDICT
+//     // ========================================================
+
+//     let verdict = runnerResult.status || "Wrong Answer";
+
+//     if (passedTestCases === totalTestCases && totalTestCases > 0) {
+//       verdict = "Accepted";
+//     }
+
+//     if (String(verdict).toLowerCase() === "accepted") {
+//       verdict = "Accepted";
+//     }
+
+//     // ========================================================
+//     // EXECUTION DETAILS
+//     // ========================================================
+
+//     const firstResult = results[0] || {};
+
+//     const executionTime =
+//       firstResult.executionTimeMs ?? firstResult.time ?? null;
+
+//     const memory = firstResult.memory ?? null;
+
+//     const compileOutput =
+//       runnerResult.compileOutput || firstResult.compileOutput || null;
+
+//     const stderr = runnerResult.stderr || firstResult.stderr || null;
+
+//     // ========================================================
+//     // FIND TEST-WISE SUBMISSION
+//     // One User + One Test = One Submission document
+//     // ========================================================
+
+//     let submission = await Submission.findOne({
+//       user: req.user._id,
+
+//       test: testId,
+//     });
+
+//     // ========================================================
+//     // BLOCK AFTER FINAL SUBMISSION
+//     // ========================================================
+
+//     if (submission?.status === "submitted") {
+//       return res.status(409).json({
+//         success: false,
+//         message: "This test has already been submitted",
+//       });
+//     }
+
+//     // ========================================================
+//     // CREATE FIRST SUBMISSION DOCUMENT
+//     // ========================================================
+
+//     if (!submission) {
+//       submission = new Submission({
+//         user: req.user._id,
+//         test: testId,
+//         problems: [],
+//         status: "in_progress",
+//       });
+//     }
+
+//     // ========================================================
+//     // FIND EXISTING PROBLEM
+//     // ========================================================
+
+//     const existingProblemIndex = submission.problems.findIndex(
+//       (item) => String(item.problem) === String(problemId),
+//     );
+
+//     // ========================================================
+//     // PROBLEM SUBMISSION DATA
+//     // ========================================================
+
+//     const problemSubmission = {
+//       problem: problemId,
+//       code,
+//       language,
+//       verdict,
+//       passedTestCases,
+//       totalTestCases,
+//       executionTime,
+//       memory,
+//       compileOutput,
+//       stderr,
+//       submittedAt: new Date(),
+//     };
+
+//     // ========================================================
+//     // UPDATE EXISTING OR ADD NEW
+//     // ========================================================
+
+//     if (existingProblemIndex !== -1) {
+//       submission.problems[existingProblemIndex] = problemSubmission;
+//     } else {
+//       submission.problems.push(problemSubmission);
+//     }
+
+//     // ========================================================
+//     // SAVE SUBMISSION
+//     // ========================================================
+
+//     await submission.save();
+
+//     // ========================================================
+//     // UPDATE TEMPORARY ATTEMPT
+//     // ========================================================
+
+//     const attemptProblemIndex = attempt.problemResults.findIndex(
+//       (item) => String(item.problem) === String(problemId),
+//     );
+
+//     const problemStatus = verdict === "Accepted" ? "passed" : "failed";
+
+//     if (attemptProblemIndex !== -1) {
+//       attempt.problemResults[attemptProblemIndex].status = problemStatus;
+
+//       attempt.problemResults[attemptProblemIndex].submission = submission._id;
+//     } else {
+//       attempt.problemResults.push({
+//         problem: problemId,
+
+//         status: problemStatus,
+
+//         submission: submission._id,
+//       });
+//     }
+
+//     await attempt.save();
+
+//     // ========================================================
+//     // QUESTION STATS
+//     // ========================================================
+
+//     const attemptedProblems = submission.problems.length;
+
+//     const solvedProblems = submission.problems.filter(
+//       (item) => item.verdict === "Accepted",
+//     ).length;
+
+//     const totalProblems = test.problems.length;
+
+//     // ========================================================
+//     // SAFE RESULTS
+//     // Hidden test cases ke input/output expose nahi karenge
+//     // ========================================================
+
+//     const safeResults = results.map((result, index) => {
+//       const originalCase = testCases[index];
+
+//       const isHidden = originalCase?.isHidden === true;
+
+//       if (isHidden) {
+//         return {
+//           testCase: result.testCase || index + 1,
+
+//           hidden: true,
+
+//           status:
+//             result.status || (result.passed ? "Accepted" : "Wrong Answer"),
+
+//           executionTimeMs: result.executionTimeMs ?? result.time ?? null,
+//         };
+//       }
+
+//       return result;
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: verdict === "Accepted" ? "Problem accepted" : verdict,
+//       verdict,
+//       passedTestCases,
+//       totalTestCases,
+//       attemptedProblems,
+//       solvedProblems,
+//       totalProblems,
+//       submission: {
+//         _id: submission._id,
+//         test: submission.test,
+//         problem: problemId,
+//         verdict,
+//         passedTestCases,
+//         totalTestCases,
+//         executionTime,
+//         memory,
+//         compileOutput,
+//         stderr,
+//         status: submission.status,
+//       },
+
+//       results: safeResults,
+//     });
+//   } catch (error) {
+//     console.error("SUBMIT CODE ERROR:", error);
+
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Submission already exists for this test. Please retry.",
+//       });
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Submission failed",
+//       error: error.message,
+//     });
+//   }
+// };
 
 export const getMySubmissions = async (req, res) => {
   try {
