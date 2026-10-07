@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import Editor from "@monaco-editor/react";
-
+import ReactMarkdown from "react-markdown";
 import {
   AlertTriangle,
   Bot,
@@ -1646,179 +1646,659 @@ const ProblemNavigation = ({
 
 const AIContent = ({
   promptsRemaining,
-
   maxPrompts,
-
   currentAIMessages,
-
   aiLoading,
-
   aiPrompt,
-
   setAiPrompt,
-
   remainingSeconds,
-
   askAI,
-
   close,
 }) => {
-  return (
-    <div className="flex h-full w-full flex-col bg-white">
-      {/* HEADER  */}
+  const usedPrompts = Math.max(
+    maxPrompts - promptsRemaining,
+    0,
+  );
 
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600">
-            <Sparkles size={17} />
+  const progress =
+    maxPrompts > 0
+      ? (promptsRemaining / maxPrompts) * 100
+      : 0;
+
+  const handleKeyDown = (event) => {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !aiLoading &&
+      aiPrompt.trim() &&
+      promptsRemaining > 0 &&
+      remainingSeconds > 0
+    ) {
+      event.preventDefault();
+
+      askAI();
+    }
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col bg-[#fafbff]">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
+              <Sparkles size={19} />
+
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="truncate text-sm font-bold text-gray-950">
+                  AI Assistant
+                </h3>
+
+                <span className="rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-600">
+                  Hint Mode
+                </span>
+              </div>
+
+              <p className="mt-1 text-[11px] leading-4 text-gray-500">
+                Ask for hints, debugging help and complexity guidance.
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-bold text-gray-900">AI Assistant </h3>
+          <button
+            type="button"
+            onClick={close}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </div>
 
-            <p className="text-[11px] text-gray-500">
-              {promptsRemaining} of {maxPrompts} prompts left
+      <div className="shrink-0 border-b border-gray-100 bg-white px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+              AI Prompts
+            </p>
+
+            <p className="mt-1 text-xs font-semibold text-gray-700">
+              {promptsRemaining} remaining
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-right">
+            <p className="text-[10px] text-indigo-400">
+              Used
+            </p>
+
+            <p className="text-sm font-bold text-indigo-700">
+              {usedPrompts}/{maxPrompts}
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={close}
-          className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* LIMIT  */}
-
-      <div className="border-b border-gray-100 px-4 py-3">
-        <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
           <motion.div
             initial={{
               width: 0,
             }}
             animate={{
-              width:
-                maxPrompts > 0
-                  ? `${(promptsRemaining / maxPrompts) * 100}%`
-                  : "0%",
+              width: `${Math.max(
+                0,
+                Math.min(progress, 100),
+              )}%`,
             }}
-            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+            transition={{
+              duration: 0.4,
+            }}
+            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500"
           />
         </div>
       </div>
 
-      {/* MESSAGES  */}
-
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         {currentAIMessages.length === 0 ? (
-          <div className="px-4 pt-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-              <Bot size={27} />
-            </div>
+          <div className="flex h-full min-h-[320px] items-center justify-center">
+            <div className="w-full max-w-sm text-center">
+              <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-600 shadow-sm">
+                <Bot size={29} />
 
-            <p className="mt-4 font-bold text-gray-800">Need a hint? </p>
+                <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm">
+                  <Sparkles
+                    size={12}
+                    className="text-violet-500"
+                  />
+                </div>
+              </div>
 
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              Ask about your approach, bugs, complexity or edge cases.
-            </p>
+              <h4 className="mt-5 text-base font-bold text-gray-900">
+                Need a hint?
+              </h4>
 
-            <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 p-3 text-xs leading-5 text-orange-700">
-              AI will guide you, not directly solve the complete problem.
+              <p className="mx-auto mt-2 max-w-[280px] text-xs leading-5 text-gray-500">
+                Ask me about your approach, bugs, edge cases or complexity.
+              </p>
+
+              <div className="mt-5 grid grid-cols-1 gap-2 text-left">
+                {[
+                  "Give me a hint",
+                  "What's wrong with my approach?",
+                  "Help with time complexity",
+                ].map((text) => (
+                  <button
+                    key={text}
+                    type="button"
+                    disabled={
+                      aiLoading ||
+                      promptsRemaining <= 0 ||
+                      remainingSeconds === 0
+                    }
+                    onClick={() =>
+                      setAiPrompt(text)
+                    }
+                    className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-medium text-gray-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/50 hover:text-indigo-700 disabled:opacity-50"
+                  >
+                    <span>{text}</span>
+
+                    <ChevronRight
+                      size={14}
+                      className="text-gray-300 transition group-hover:text-indigo-500"
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50/80 px-3 py-2.5 text-[10px] leading-4 text-amber-700">
+                AI gives guidance and hints instead of directly solving the
+                complete assessment.
+              </div>
             </div>
           </div>
         ) : (
-          currentAIMessages.map(
-            (
-              message,
+          <div className="space-y-5">
+            {currentAIMessages.map(
+              (message, index) => {
+                const isStudent =
+                  message.role ===
+                  "student";
 
-              index,
-            ) => (
+                return (
+                  <motion.div
+                    key={`${message.role}-${index}`}
+                    initial={{
+                      opacity: 0,
+                      y: 8,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      y: 0,
+                    }}
+                    transition={{
+                      duration: 0.2,
+                    }}
+                    className={`flex ${
+                      isStudent
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`flex max-w-[95%] gap-2.5 ${
+                        isStudent
+                          ? "flex-row-reverse"
+                          : ""
+                      }`}
+                    >
+                      <div
+                        className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                          isStudent
+                            ? "bg-indigo-100 text-indigo-600"
+                            : "bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+                        }`}
+                      >
+                        {isStudent ? (
+                          <span className="text-[10px] font-bold">
+                            You
+                          </span>
+                        ) : (
+                          <Sparkles size={13} />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className={`mb-1 px-1 text-[10px] font-semibold ${
+                            isStudent
+                              ? "text-right text-indigo-400"
+                              : "text-gray-400"
+                          }`}
+                        >
+                          {isStudent
+                            ? "You"
+                            : "AI Assistant"}
+                        </p>
+
+                        <div
+                          className={`overflow-hidden rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                            isStudent
+                              ? "rounded-tr-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+                              : "rounded-tl-md border border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
+                          {isStudent ? (
+                            <p className="whitespace-pre-wrap break-words leading-6">
+                              {
+                                message.content
+                              }
+                            </p>
+                          ) : (
+                            <ReactMarkdown
+                              components={{
+                                h1: ({
+                                  children,
+                                }) => (
+                                  <h1 className="mb-3 mt-5 text-lg font-bold leading-6 text-gray-950 first:mt-0">
+                                    {
+                                      children
+                                    }
+                                  </h1>
+                                ),
+
+                                h2: ({
+                                  children,
+                                }) => (
+                                  <h2 className="mb-3 mt-5 text-base font-bold leading-6 text-gray-950 first:mt-0">
+                                    {
+                                      children
+                                    }
+                                  </h2>
+                                ),
+
+                                h3: ({
+                                  children,
+                                }) => (
+                                  <h3 className="mb-2 mt-4 text-sm font-bold text-gray-950 first:mt-0">
+                                    {
+                                      children
+                                    }
+                                  </h3>
+                                ),
+
+                                h4: ({
+                                  children,
+                                }) => (
+                                  <h4 className="mb-2 mt-4 text-sm font-semibold text-gray-900 first:mt-0">
+                                    {
+                                      children
+                                    }
+                                  </h4>
+                                ),
+
+                                p: ({
+                                  children,
+                                }) => (
+                                  <p className="mb-3 break-words text-sm leading-6 text-gray-700 last:mb-0">
+                                    {
+                                      children
+                                    }
+                                  </p>
+                                ),
+
+                                strong: ({
+                                  children,
+                                }) => (
+                                  <strong className="font-bold text-gray-950">
+                                    {
+                                      children
+                                    }
+                                  </strong>
+                                ),
+
+                                em: ({
+                                  children,
+                                }) => (
+                                  <em className="text-gray-700">
+                                    {
+                                      children
+                                    }
+                                  </em>
+                                ),
+
+                                ul: ({
+                                  children,
+                                }) => (
+                                  <ul className="mb-3 ml-5 list-disc space-y-1.5 text-sm text-gray-700 marker:text-indigo-500">
+                                    {
+                                      children
+                                    }
+                                  </ul>
+                                ),
+
+                                ol: ({
+                                  children,
+                                }) => (
+                                  <ol className="mb-3 ml-5 list-decimal space-y-1.5 text-sm text-gray-700 marker:font-semibold marker:text-indigo-600">
+                                    {
+                                      children
+                                    }
+                                  </ol>
+                                ),
+
+                                li: ({
+                                  children,
+                                }) => (
+                                  <li className="pl-0.5 leading-6">
+                                    {
+                                      children
+                                    }
+                                  </li>
+                                ),
+
+                                blockquote: ({
+                                  children,
+                                }) => (
+                                  <blockquote className="my-3 border-l-4 border-indigo-300 bg-indigo-50 px-3 py-2 text-sm italic text-indigo-800">
+                                    {
+                                      children
+                                    }
+                                  </blockquote>
+                                ),
+
+                                hr: () => (
+                                  <hr className="my-4 border-gray-200" />
+                                ),
+
+                                code: ({
+                                  children,
+                                  className,
+                                  ...props
+                                }) => {
+                                  const isBlock =
+                                    Boolean(
+                                      className,
+                                    );
+
+                                  if (
+                                    isBlock
+                                  ) {
+                                    return (
+                                      <code
+                                        className={`${className || ""} font-mono text-xs text-gray-100`}
+                                        {...props}
+                                      >
+                                        {
+                                          children
+                                        }
+                                      </code>
+                                    );
+                                  }
+
+                                  return (
+                                    <code
+                                      className="rounded-md bg-indigo-50 px-1.5 py-0.5 font-mono text-[12px] font-medium text-indigo-700"
+                                      {...props}
+                                    >
+                                      {
+                                        children
+                                      }
+                                    </code>
+                                  );
+                                },
+
+                                pre: ({
+                                  children,
+                                }) => (
+                                  <pre className="my-3 max-w-full overflow-x-auto rounded-xl border border-gray-800 bg-[#111827] p-3 text-xs leading-5 text-gray-100 shadow-inner">
+                                    {
+                                      children
+                                    }
+                                  </pre>
+                                ),
+
+                                a: ({
+                                  children,
+                                  href,
+                                }) => (
+                                  <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-medium text-indigo-600 underline decoration-indigo-200 underline-offset-2 transition hover:text-indigo-700"
+                                  >
+                                    {
+                                      children
+                                    }
+                                  </a>
+                                ),
+
+                                table: ({
+                                  children,
+                                }) => (
+                                  <div className="my-3 overflow-x-auto rounded-xl border border-gray-200">
+                                    <table className="w-full text-left text-xs">
+                                      {
+                                        children
+                                      }
+                                    </table>
+                                  </div>
+                                ),
+
+                                thead: ({
+                                  children,
+                                }) => (
+                                  <thead className="bg-gray-50 text-gray-600">
+                                    {
+                                      children
+                                    }
+                                  </thead>
+                                ),
+
+                                th: ({
+                                  children,
+                                }) => (
+                                  <th className="border-b border-gray-200 px-3 py-2 font-semibold">
+                                    {
+                                      children
+                                    }
+                                  </th>
+                                ),
+
+                                td: ({
+                                  children,
+                                }) => (
+                                  <td className="border-b border-gray-100 px-3 py-2 text-gray-600">
+                                    {
+                                      children
+                                    }
+                                  </td>
+                                ),
+                              }}
+                            >
+                              {String(
+                                message.content ||
+                                  "",
+                              )}
+                            </ReactMarkdown>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              },
+            )}
+
+            {aiLoading && (
               <motion.div
-                key={index}
                 initial={{
                   opacity: 0,
-
                   y: 6,
                 }}
                 animate={{
                   opacity: 1,
-
                   y: 0,
                 }}
-                className={`flex ${
-                  message.role === "student" ? "justify-end" : "justify-start"
-                }`}
+                className="flex justify-start"
               >
-                <div
-                  className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-6 ${
-                    message.role === "student"
-                      ? "rounded-br-md bg-gradient-to-r from-indigo-600 to-violet-600 text-white"
-                      : "rounded-bl-md border border-gray-100 bg-gray-50 text-gray-800"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{message.content} </p>
+                <div className="flex gap-2.5">
+                  <div className="mt-1 flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-white">
+                    <Sparkles
+                      size={13}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="mb-1 px-1 text-[10px] font-semibold text-gray-400">
+                      AI Assistant
+                    </p>
+
+                    <div className="flex items-center gap-2 rounded-2xl rounded-tl-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+                      <Loader2
+                        size={15}
+                        className="animate-spin text-indigo-500"
+                      />
+
+                      <span>
+                        Thinking...
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        {[0, 1, 2].map(
+                          (item) => (
+                            <motion.span
+                              key={
+                                item
+                              }
+                              animate={{
+                                opacity:
+                                  [
+                                    0.25,
+                                    1,
+                                    0.25,
+                                  ],
+                              }}
+                              transition={{
+                                duration: 1,
+                                repeat:
+                                  Infinity,
+                                delay:
+                                  item *
+                                  0.15,
+                              }}
+                              className="h-1 w-1 rounded-full bg-indigo-400"
+                            />
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
-            ),
-          )
-        )}
-
-        {aiLoading && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-gray-100 px-4 py-3 text-sm text-gray-500">
-              <Loader2 size={15} className="animate-spin" />
-              AI is thinking...
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* INPUT  */}
+      <div className="shrink-0 border-t border-gray-200 bg-white p-3 sm:p-4">
+        {promptsRemaining <= 0 ? (
+          <div className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-600">
+            AI prompt limit reached
+          </div>
+        ) : remainingSeconds <= 0 ? (
+          <div className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-600">
+            Assessment time has expired
+          </div>
+        ) : null}
 
-      <div className="shrink-0 border-t border-gray-200 bg-white p-4">
-        <textarea
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          disabled={
-            aiLoading || promptsRemaining <= 0 || remainingSeconds === 0
-          }
-          placeholder={
-            promptsRemaining > 0
-              ? "Ask for a hint..."
-              : "AI prompt limit reached"
-          }
-          className="min-h-24 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
-        />
-
-        <motion.button
-          whileTap={{
-            scale: 0.98,
-          }}
-          type="button"
-          onClick={askAI}
-          disabled={
-            aiLoading ||
-            !aiPrompt.trim() ||
-            promptsRemaining <= 0 ||
-            remainingSeconds === 0
-          }
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition disabled:opacity-50"
+        <div
+          className={`rounded-2xl border bg-gray-50 transition ${
+            aiPrompt.trim()
+              ? "border-indigo-200 bg-white shadow-sm shadow-indigo-500/5"
+              : "border-gray-200"
+          }`}
         >
-          {aiLoading ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Sparkles size={16} />
-          )}
+          <textarea
+            value={aiPrompt}
+            onChange={(event) =>
+              setAiPrompt(
+                event.target.value,
+              )
+            }
+            onKeyDown={
+              handleKeyDown
+            }
+            disabled={
+              aiLoading ||
+              promptsRemaining <= 0 ||
+              remainingSeconds === 0
+            }
+            maxLength={1000}
+            placeholder={
+              promptsRemaining > 0
+                ? "Ask for a hint..."
+                : "AI prompt limit reached"
+            }
+            className="min-h-[76px] w-full resize-none bg-transparent px-4 pb-2 pt-3 text-sm leading-6 text-gray-800 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:text-gray-400"
+          />
 
-          {aiLoading ? "Thinking..." : "Ask AI"}
-        </motion.button>
+          <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="hidden text-[10px] text-gray-400 sm:block">
+                Enter to send • Shift + Enter for new line
+              </span>
 
-        <p className="mt-2 text-center text-[10px] leading-4 text-gray-400">
-          Each successful prompt counts toward your AI limit.
-        </p>
+              <span className="text-[10px] text-gray-300 sm:hidden">
+                {aiPrompt.length}/1000
+              </span>
+            </div>
+
+            <motion.button
+              whileTap={{
+                scale: 0.94,
+              }}
+              type="button"
+              onClick={askAI}
+              disabled={
+                aiLoading ||
+                !aiPrompt.trim() ||
+                promptsRemaining <=
+                  0 ||
+                remainingSeconds ===
+                  0
+              }
+              className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-xs font-semibold text-white shadow-md shadow-indigo-500/20 transition hover:shadow-lg hover:shadow-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {aiLoading ? (
+                <Loader2
+                  size={14}
+                  className="animate-spin"
+                />
+              ) : (
+                <Send size={14} />
+              )}
+
+              <span>
+                {aiLoading
+                  ? "Thinking"
+                  : "Send"}
+              </span>
+            </motion.button>
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between px-1">
+          <p className="text-[9px] text-gray-400">
+            Each successful request uses 1 AI prompt.
+          </p>
+
+          <p className="text-[9px] font-medium text-gray-400">
+            {aiPrompt.length}/1000
+          </p>
+        </div>
       </div>
     </div>
   );
